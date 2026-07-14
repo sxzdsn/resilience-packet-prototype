@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resilience Packet Publisher — Prototype</title>
-    <link rel="stylesheet" href="styles.css?v=20260713-24" />
+    <link rel="stylesheet" href="styles.css?v=20260714-11" />
   </head>
   <body>
     <main class="app-shell figma-hidden">
@@ -20,8 +20,16 @@
         <details class="editor-section settings-section" aria-labelledby="source-content" open>
           <summary><h2 id="source-content">Google Docs link</h2></summary>
           <div class="settings-section-content">
-            <p class="settings-section-intro">Paste a viewable Google Doc and format its headings, copy, lists, links, tables, and red bracketed page directives into the packet.</p>
-            <p class="settings-section-intro page-directive-note">Put <code>[Cover]</code>, <code>[Summary Graphic]</code>, or <code>[Letter]</code> in red on its own line to select a special page style. Use a red <code>&lt;page break&gt;</code> on its own line or immediately before content to force that content onto a new page.</p>
+            <div class="source-intro-row">
+              <p class="settings-section-intro">Paste a viewable Google Doc file here. It will automatically convert the Docs styling into this template.</p>
+              <details class="import-help">
+                <summary aria-label="Google Docs import help">?</summary>
+                <div class="import-help-popover">
+                  <p>Format its headings, copy, lists, links, tables, and red bracketed page directives into the packet.</p>
+                  <p>Put <strong><code>[Cover]</code></strong>, <strong><code>[Summary Graphic]</code></strong>, or <strong><code>[Letter]</code></strong> in red on its own line to select a special page style. Use a red <strong><code>&lt;page break&gt;</code></strong> on its own line or immediately before content to force that content onto a new page.</p>
+                </div>
+              </details>
+            </div>
             <label class="source-link-control" for="docsUrl">
               Document URL
               <input
@@ -31,6 +39,7 @@
                 autocomplete="url"
                 spellcheck="false"
                 placeholder="Paste link here"
+                value="https://docs.google.com/document/d/13yhuKlw0WF3yjTP6YQW87R5v5gYrE31CMm5VcE5GNC8/edit?tab=t.nn8dmo3ghr8e"
               />
             </label>
             <div id="docsLinkPreview" class="source-doc-preview" hidden>
@@ -42,8 +51,26 @@
               <a id="openDocsLink" class="text-link" href="#" target="_blank" rel="noreferrer">Open Google Doc</a>
             </div>
             <p class="source-access-note">The document must be shared so anyone with the link can view it.</p>
-            <p id="importSummary" class="import-summary" aria-live="polite"></p>
+            <p id="importSummary" class="import-summary" aria-live="polite" hidden></p>
             <div id="docsSource" hidden></div>
+          </div>
+        </details>
+
+        <details class="editor-section settings-section illustration-library-section" aria-labelledby="illustration-library-heading" open>
+          <summary><h2 id="illustration-library-heading">Illustration library</h2></summary>
+          <div class="settings-section-content">
+            <p class="settings-section-intro">Add illustrations here, then drag one directly onto a packet page.</p>
+            <label class="illustration-upload-control" for="illustrationInput">
+              Add illustrations
+              <input id="illustrationInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple />
+            </label>
+            <div id="illustrationLibrary" class="illustration-library" aria-live="polite">
+              <p class="illustration-library-empty">Drop illustration files here, or add them above. Then drag a thumbnail onto the packet.</p>
+            </div>
+            <div class="illustration-save-row">
+              <button id="saveIllustrations" class="source-refresh-button" type="button">Save illustrations</button>
+              <p id="illustrationSaveStatus" class="illustration-save-status" aria-live="polite"></p>
+            </div>
           </div>
         </details>
 
@@ -99,6 +126,6 @@
 
     <div id="measurementStage" class="measurement-stage" aria-hidden="true"></div>
     <script src="packet-content.js?v=20260713-14"></script>
-    <script type="module" src="app.js?v=20260714-01"></script>
+  <script type="module" src="app.js?v=20260714-21"></script>
   </body>
 </html>

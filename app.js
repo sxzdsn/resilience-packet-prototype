@@ -1,4 +1,4 @@
-import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260713-15";
+import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260714-05";
 import { getLegacyFrameClass, makePageComparisons } from "./figma-comparison.js?v=20260713-01";
 
 const sampleSource = window.RESILIENCE_PACKET_SOURCE;
@@ -18,6 +18,10 @@ const els = {
   importButton: document.querySelector("#importButton"),
   refreshButton: document.querySelector("#refreshButton"),
   importSummary: document.querySelector("#importSummary"),
+  illustrationInput: document.querySelector("#illustrationInput"),
+  illustrationLibrary: document.querySelector("#illustrationLibrary"),
+  saveIllustrations: document.querySelector("#saveIllustrations"),
+  illustrationSaveStatus: document.querySelector("#illustrationSaveStatus"),
   pages: document.querySelector("#pages"),
   warnings: document.querySelector("#renderWarnings"),
   printBlocker: document.querySelector("#printBlocker"),
@@ -29,6 +33,33 @@ const els = {
 
 let documentModel = { chapters: [] };
 let previewCenterFrame;
+const illustrationPositions = new Map();
+const illustrationLibrary = [
+  {
+    id: "bundled-hospital-intake-form",
+    name: "Hospital intake form",
+    src: "assets/illustrations/hospital-intake-form.webp",
+  },
+  {
+    id: "bundled-legal-scales",
+    name: "Legal scales",
+    src: "assets/illustrations/legal-scales.webp",
+  },
+  {
+    id: "bundled-school-supplies",
+    name: "School supplies",
+    src: "assets/illustrations/school-supplies.webp",
+  },
+  {
+    id: "bundled-school-backpack",
+    name: "School backpack",
+    src: "assets/illustrations/school-backpack.webp",
+  },
+];
+const placedIllustrations = [];
+let illustrationSequence = 0;
+const bundledIllustrationIds = new Set(illustrationLibrary.map((asset) => asset.id));
+const illustrationStorageKey = "resilience-packet-illustrations-v1";
 
 function centerPreviewPages() {
   window.cancelAnimationFrame(previewCenterFrame);
@@ -49,6 +80,15 @@ function slugify(value) {
     .replace(/(^-|-$)/g, "");
 }
 
+function stableId(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function googleDocsPreviewUrl(value) {
   const docsUrl = normalizeGoogleDocsUrl(value);
   if (!docsUrl) return "";
@@ -65,7 +105,11 @@ function syncDocsPreview(value = els.docsUrl.value) {
 }
 
 function safeImageSource(value) {
-  return /^(?:https:\/\/|data:image\/(?:png|jpe?g|gif|webp);base64,)/i.test(value || "");
+  return /^(?:https:\/\/|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,)/i.test(value || "");
+}
+
+function isStandaloneWebsite(value) {
+  return /^(?:(?:https?:\/\/|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?)$/i.test(value.trim());
 }
 
 function cleanHtml(node) {
@@ -105,6 +149,7 @@ function parseSource() {
   let chapter = null;
   let subsection = null;
   let activeParentId = null;
+  let imageIndex = 0;
 
   const ensureChapter = () => {
     if (!chapter) {
@@ -168,6 +213,24 @@ function parseSource() {
       return;
     }
 
+    // A blank paragraph after an H3 is an authoring signal to resume the
+    // parent H2 rather than continue the nested callout.
+    const breaksOutOfNested = node.dataset.breakOutOfNested === "true"
+      || Number(node.dataset.blankLinesBefore) > 0;
+    if (breaksOutOfNested && subsection?.depth === 3) {
+      const parentId = subsection.parentId;
+      subsection = {
+        id: `${chapter.id}-body-${chapter.subsections.length + 1}`,
+        title: "",
+        isUntitled: true,
+        depth: 2,
+        parentId,
+        blocks: [],
+      };
+      chapter.subsections.push(subsection);
+      activeParentId = parentId;
+    }
+
     const target = ensureSubsection();
     const blockStart = target.blocks.length;
     if (tag === "ul" || tag === "ol") {
@@ -204,9 +267,12 @@ function parseSource() {
     } else if (tag === "figure" && node.dataset.blockType === "doc-image") {
       const image = node.querySelector("img");
       if (image && safeImageSource(image.getAttribute("src"))) {
+        imageIndex += 1;
+        const src = image.getAttribute("src");
         target.blocks.push({
           type: "image",
-          src: image.getAttribute("src"),
+          id: `illustration-${imageIndex}-${stableId(src)}`,
+          src,
           alt: image.getAttribute("alt") || "",
           caption: node.querySelector("figcaption")?.textContent.trim() || "",
           width: Number(node.dataset.width) || 0,
@@ -261,11 +327,49 @@ function parseSource() {
     } else if (node.dataset.blockType === "section-divider") {
       target.blocks.push({ type: "section-divider" });
     } else if (tag === "blockquote") {
-      target.blocks.push({ type: "callout", html: cleanHtml(node) });
+      const hasCalloutTitle = [...node.children].some((child) => (
+        child.tagName === "STRONG" || child.tagName === "B"
+      ));
+      if (hasCalloutTitle) {
+        target.blocks.push({ type: "callout", html: cleanHtml(node) });
+      } else {
+        // Google Docs ends a quoted/nested run with a separate plain blockquote.
+        // Treat its children as normal parent-section content rather than extending
+        // the left rule from the preceding titled callout.
+        [...node.children].forEach((child) => {
+          const childTag = child.tagName.toLowerCase();
+          if (childTag === "ul" || childTag === "ol") {
+            target.blocks.push({
+              type: "list",
+              ordered: childTag === "ol",
+              start: childTag === "ol" ? Number(child.getAttribute("start")) || 1 : undefined,
+              items: [...child.querySelectorAll(":scope > li")].map((item) => cleanHtml(item)),
+            });
+            return;
+          }
+          const html = cleanHtml(child) || child.textContent.trim();
+          if (!html) return;
+          target.blocks.push({
+            type: "paragraph",
+            html,
+            hasSoftBreak: /<br\s*\/?\s*>/i.test(html),
+          });
+        });
+      }
+    } else if (tag === "p" && isStandaloneWebsite(text)) {
+      target.blocks.push({ type: "resource-link", text });
     } else {
-      target.blocks.push({ type: "paragraph", html: cleanHtml(node) || text });
+      const html = cleanHtml(node) || text;
+      target.blocks.push({
+        type: "paragraph",
+        html,
+        // Google Docs Shift+Enter exports as <br>; keep that line break inside one block.
+        hasSoftBreak: /<br\s*\/?\s*>/i.test(html),
+      });
     }
-    if (target.blocks.length > blockStart && node.dataset.blankLinesBefore) {
+    // The blank paragraph that exits an H3 describes structure, not a visible
+    // spacer, so do not translate it into a rendered margin.
+    if (target.blocks.length > blockStart && node.dataset.blankLinesBefore && !breaksOutOfNested) {
       target.blocks[blockStart].blankLinesBefore = Number(node.dataset.blankLinesBefore) || 0;
     }
     if (target.blocks.length > blockStart && node.dataset.pageBreakBefore === "true") {
@@ -337,7 +441,10 @@ function makeBlock(block) {
 
   if (block.type === "image") {
     const figure = document.createElement("figure");
-    figure.className = "content-block content-image";
+    figure.className = "content-block content-image preview-illustration";
+    figure.dataset.illustrationId = block.id || `illustration-${block.src}`;
+    figure.tabIndex = 0;
+    figure.setAttribute("aria-label", `${block.alt || "Illustration"}. Drag to position it in the preview.`);
     const image = document.createElement("img");
     image.src = safeImageSource(block.src) ? block.src : "";
     image.alt = block.alt || "";
@@ -426,6 +533,10 @@ function makeBlock(block) {
   if (block.type === "table") {
     const table = document.createElement("table");
     table.className = "content-block content-table";
+    table.classList.toggle(
+      "table-single-column",
+      block.rows.length === 3 && block.rows.every((row) => row.length === 1),
+    );
     const prompt = plainText(block.rows[0]?.[0]?.html || "");
     if (prompt.startsWith("Make a report to police")) table.classList.add("table-police-report");
     const body = document.createElement("tbody");
@@ -482,6 +593,319 @@ function makeBlock(block) {
   return element;
 }
 
+function applyIllustrationPosition(illustration, position) {
+  illustration.style.setProperty("--illustration-x", `${position.x}px`);
+  illustration.style.setProperty("--illustration-y", `${position.y}px`);
+}
+
+function createLibraryIllustration(asset) {
+  const item = document.createElement("article");
+  item.className = "illustration-library-item";
+  item.draggable = true;
+  item.dataset.illustrationAsset = asset.id;
+  item.setAttribute("aria-label", `Drag ${asset.name} onto a packet page`);
+
+  const image = document.createElement("img");
+  image.src = asset.src;
+  image.alt = asset.name;
+  const label = document.createElement("p");
+  label.textContent = asset.name;
+  item.append(image, label);
+  item.addEventListener("dragstart", (event) => {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-resilience-illustration", asset.id);
+    item.classList.add("is-dragging");
+  });
+  item.addEventListener("dragend", () => item.classList.remove("is-dragging"));
+  return item;
+}
+
+function renderIllustrationLibrary() {
+  els.illustrationLibrary.replaceChildren();
+  if (!illustrationLibrary.length) {
+    const empty = document.createElement("p");
+    empty.className = "illustration-library-empty";
+    empty.textContent = "Drop illustration files here, or add them above. Then drag a thumbnail onto the packet.";
+    els.illustrationLibrary.append(empty);
+    return;
+  }
+  illustrationLibrary.forEach((asset) => els.illustrationLibrary.append(createLibraryIllustration(asset)));
+}
+
+function setIllustrationSaveStatus(message, dirty = false) {
+  els.illustrationSaveStatus.textContent = message;
+  els.illustrationSaveStatus.classList.toggle("is-dirty", dirty);
+}
+
+function markIllustrationsDirty() {
+  setIllustrationSaveStatus("Illustration changes are not saved yet.", true);
+}
+
+function saveIllustrations() {
+  const snapshot = {
+    assets: illustrationLibrary
+      .filter((asset) => !bundledIllustrationIds.has(asset.id))
+      .map(({ id, name, src }) => ({ id, name, src })),
+    placements: placedIllustrations.map(({ id, assetId, frame, x, y, width }) => ({ id, assetId, frame, x, y, width })),
+    positions: [...illustrationPositions.entries()].map(([id, position]) => ({ id, x: position.x, y: position.y })),
+  };
+  try {
+    window.localStorage.setItem(illustrationStorageKey, JSON.stringify(snapshot));
+    setIllustrationSaveStatus("Saved in this browser. It will be restored when this packet opens again.");
+  } catch {
+    setIllustrationSaveStatus("Couldn’t save these illustrations. The browser may be out of storage.", true);
+  }
+}
+
+function restoreSavedIllustrations() {
+  let snapshot;
+  try {
+    const stored = window.localStorage.getItem(illustrationStorageKey);
+    if (!stored) return;
+    snapshot = JSON.parse(stored);
+  } catch {
+    return;
+  }
+  if (!snapshot || typeof snapshot !== "object") return;
+
+  const knownIds = new Set(illustrationLibrary.map((asset) => asset.id));
+  const savedAssets = Array.isArray(snapshot.assets) ? snapshot.assets : [];
+  savedAssets.forEach((asset) => {
+    if (!asset || typeof asset.id !== "string" || typeof asset.name !== "string" || !safeImageSource(asset.src) || knownIds.has(asset.id)) return;
+    illustrationLibrary.push({ id: asset.id, name: asset.name, src: asset.src });
+    knownIds.add(asset.id);
+  });
+
+  const savedPlacements = Array.isArray(snapshot.placements) ? snapshot.placements : [];
+  savedPlacements.forEach((placement) => {
+    if (!placement || typeof placement.id !== "string" || !knownIds.has(placement.assetId) || typeof placement.frame !== "string") return;
+    if (![placement.x, placement.y, placement.width].every(Number.isFinite)) return;
+    placedIllustrations.push({
+      id: placement.id,
+      assetId: placement.assetId,
+      frame: placement.frame,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+    });
+  });
+
+  const savedPositions = Array.isArray(snapshot.positions) ? snapshot.positions : [];
+  savedPositions.forEach((position) => {
+    if (!position || typeof position.id !== "string" || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+    illustrationPositions.set(position.id, { x: position.x, y: position.y });
+  });
+
+  const savedNumbers = [...illustrationLibrary, ...placedIllustrations]
+    .map((item) => Number(item.id.match(/(?:asset|placed)-(\d+)$/)?.[1] || 0));
+  illustrationSequence = Math.max(illustrationSequence, ...savedNumbers);
+  if (placedIllustrations.length || savedAssets.length) {
+    setIllustrationSaveStatus("Saved illustration layout restored.");
+  }
+}
+
+function readIllustrationFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve({
+      id: `asset-${++illustrationSequence}`,
+      name: file.name.replace(/\.[^.]+$/, "") || "Illustration",
+      src: reader.result,
+    }));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addIllustrationFiles(files) {
+  const imageFiles = [...files].filter((file) => file.type.startsWith("image/"));
+  const assets = await Promise.all(imageFiles.map(readIllustrationFile));
+  illustrationLibrary.push(...assets);
+  renderIllustrationLibrary();
+  if (assets.length) markIllustrationsDirty();
+  return assets;
+}
+
+function placeLibraryIllustration(assetId, paper, clientX, clientY) {
+  const asset = illustrationLibrary.find((item) => item.id === assetId);
+  if (!asset || !paper) return;
+  const paperRect = paper.getBoundingClientRect();
+  const scale = paperRect.width / paper.offsetWidth || 1;
+  const placement = {
+    id: `placed-${++illustrationSequence}`,
+    assetId,
+    frame: paper.dataset.figmaFrame,
+    x: Math.max(0, (clientX - paperRect.left) / scale),
+    y: Math.max(0, (clientY - paperRect.top) / scale),
+    width: 132,
+  };
+  placedIllustrations.push(placement);
+  renderPlacedIllustrations();
+  initializeIllustrationDragging();
+  initializeIllustrationResizing();
+  markIllustrationsDirty();
+}
+
+function renderPlacedIllustrations() {
+  els.pages.querySelectorAll(".placed-illustration").forEach((item) => item.remove());
+  placedIllustrations.forEach((placement) => {
+    const asset = illustrationLibrary.find((item) => item.id === placement.assetId);
+    const paper = [...els.pages.querySelectorAll(".paper")].find((item) => item.dataset.figmaFrame === placement.frame);
+    if (!asset || !paper) return;
+    const illustration = document.createElement("figure");
+    illustration.className = "content-image preview-illustration placed-illustration";
+    illustration.dataset.illustrationId = placement.id;
+    illustration.style.left = `${placement.x}px`;
+    illustration.style.top = `${placement.y}px`;
+    illustration.style.width = `${placement.width || 132}px`;
+    illustration.tabIndex = 0;
+    illustration.setAttribute("aria-label", `${asset.name}. Drag to reposition it, or use the lower-right handle to resize it.`);
+    const image = document.createElement("img");
+    image.src = asset.src;
+    image.alt = asset.name;
+    const remove = document.createElement("button");
+    remove.className = "illustration-remove";
+    remove.type = "button";
+    remove.setAttribute("aria-label", `Remove ${asset.name}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => {
+      const index = placedIllustrations.findIndex((item) => item.id === placement.id);
+      if (index !== -1) placedIllustrations.splice(index, 1);
+      illustrationPositions.delete(placement.id);
+      illustration.remove();
+      markIllustrationsDirty();
+    });
+    const resize = document.createElement("button");
+    resize.className = "illustration-resize";
+    resize.type = "button";
+    resize.setAttribute("aria-label", `Resize ${asset.name}`);
+    illustration.append(image, remove, resize);
+    paper.append(illustration);
+  });
+}
+
+function initializeIllustrationDragging() {
+  els.pages.querySelectorAll(".preview-illustration").forEach((illustration) => {
+    if (illustration.dataset.dragInitialized === "true") return;
+    illustration.dataset.dragInitialized = "true";
+    const id = illustration.dataset.illustrationId;
+    const savedPosition = illustrationPositions.get(id) || { x: 0, y: 0 };
+    applyIllustrationPosition(illustration, savedPosition);
+
+    illustration.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest(".illustration-remove")) return;
+
+      const paper = illustration.closest(".paper");
+      if (!paper) return;
+      event.preventDefault();
+      illustration.focus({ preventScroll: true });
+      illustration.setPointerCapture(event.pointerId);
+      illustration.classList.add("is-dragging");
+
+      const startPosition = illustrationPositions.get(id) || { x: 0, y: 0 };
+      const startX = event.clientX;
+      const startY = event.clientY;
+
+      const move = (moveEvent) => {
+        const paperRect = paper.getBoundingClientRect();
+        const illustrationRect = illustration.getBoundingClientRect();
+        const scale = paperRect.width / paper.offsetWidth || 1;
+        const minX = startPosition.x + (paperRect.left - illustrationRect.left) / scale;
+        const maxX = startPosition.x + (paperRect.right - illustrationRect.right) / scale;
+        const minY = startPosition.y + (paperRect.top - illustrationRect.top) / scale;
+        const maxY = startPosition.y + (paperRect.bottom - illustrationRect.bottom) / scale;
+        const position = {
+          x: Math.min(maxX, Math.max(minX, startPosition.x + (moveEvent.clientX - startX) / scale)),
+          y: Math.min(maxY, Math.max(minY, startPosition.y + (moveEvent.clientY - startY) / scale)),
+        };
+        illustrationPositions.set(id, position);
+        applyIllustrationPosition(illustration, position);
+      };
+
+      const stop = () => {
+        illustration.classList.remove("is-dragging");
+        illustration.removeEventListener("pointermove", move);
+        illustration.removeEventListener("pointerup", stop);
+        illustration.removeEventListener("pointercancel", stop);
+        markIllustrationsDirty();
+      };
+
+      illustration.addEventListener("pointermove", move);
+      illustration.addEventListener("pointerup", stop);
+      illustration.addEventListener("pointercancel", stop);
+    });
+  });
+}
+
+function initializeIllustrationResizing() {
+  els.pages.querySelectorAll(".placed-illustration").forEach((illustration) => {
+    const handle = illustration.querySelector(".illustration-resize");
+    if (!handle || handle.dataset.resizeInitialized === "true") return;
+    handle.dataset.resizeInitialized = "true";
+    const id = illustration.dataset.illustrationId;
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const placement = placedIllustrations.find((item) => item.id === id);
+      const paper = illustration.closest(".paper");
+      if (!placement || !paper) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+      illustration.classList.add("is-resizing");
+
+      const paperRect = paper.getBoundingClientRect();
+      const scale = paperRect.width / paper.offsetWidth || 1;
+      const startWidth = placement.width || 132;
+      const startX = event.clientX;
+      const position = illustrationPositions.get(id) || { x: 0, y: 0 };
+      const maxWidth = Math.max(52, paper.offsetWidth - placement.x - position.x);
+
+      const move = (moveEvent) => {
+        const width = Math.min(maxWidth, Math.max(52, startWidth + (moveEvent.clientX - startX) / scale));
+        placement.width = width;
+        illustration.style.width = `${width}px`;
+      };
+
+      const stop = () => {
+        illustration.classList.remove("is-resizing");
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", stop);
+        handle.removeEventListener("pointercancel", stop);
+        markIllustrationsDirty();
+      };
+
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", stop);
+      handle.addEventListener("pointercancel", stop);
+    });
+  });
+}
+
+function initializeIllustrationDropTargets() {
+  els.pages.querySelectorAll(".paper").forEach((paper) => {
+    paper.addEventListener("dragover", (event) => {
+      if (![...event.dataTransfer.types].some((type) => type === "Files" || type === "application/x-resilience-illustration")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      paper.classList.add("is-illustration-drop-target");
+    });
+    paper.addEventListener("dragleave", () => paper.classList.remove("is-illustration-drop-target"));
+    paper.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      paper.classList.remove("is-illustration-drop-target");
+      const assetId = event.dataTransfer.getData("application/x-resilience-illustration");
+      if (assetId) {
+        placeLibraryIllustration(assetId, paper, event.clientX, event.clientY);
+        return;
+      }
+      const assets = await addIllustrationFiles(event.dataTransfer.files);
+      if (assets[0]) placeLibraryIllustration(assets[0].id, paper, event.clientX, event.clientY);
+    });
+  });
+}
+
 function mergeBlockFragments(blocks) {
   return blocks.reduce((merged, block) => {
     const previous = merged.at(-1);
@@ -525,6 +949,7 @@ function makeSubsectionHeadingRow(section, continued = false) {
 function makeSubsection(subsection, blocks, continued = false) {
   const wrapper = document.createElement("section");
   wrapper.className = "subsection";
+  wrapper.classList.toggle("is-heading-anchor", subsection.anchorsNextHeading === true);
   wrapper.classList.toggle("is-nested", subsection.depth === 3);
   wrapper.classList.toggle("is-continuation", continued);
   wrapper.classList.toggle("is-chapter-last", subsection.isChapterLast === true);
@@ -547,6 +972,26 @@ function makeSubsection(subsection, blocks, continued = false) {
   return wrapper;
 }
 
+function makeParentContinuation(parent) {
+  const wrapper = document.createElement("section");
+  wrapper.className = "subsection parent-continuation";
+  wrapper.dataset.subsection = parent.id;
+  wrapper.append(makeSubsectionHeadingRow(parent));
+  return wrapper;
+}
+
+function makeSubsectionWithParentContext(subsection, blocks, continued = false, parent = null) {
+  const subsectionNode = makeSubsection(subsection, blocks, continued);
+  if (!continued || subsection.depth !== 3 || !parent) {
+    return { node: subsectionNode, subsectionNode };
+  }
+
+  const fragment = document.createElement("div");
+  fragment.className = "nested-continuation";
+  fragment.append(makeParentContinuation(parent), subsectionNode);
+  return { node: fragment, subsectionNode };
+}
+
 function measure(node, frameClass = "") {
   const container = document.createElement("div");
   container.className = `measurement-content ${frameClass}`.trim();
@@ -555,12 +1000,20 @@ function measure(node, frameClass = "") {
   return container.getBoundingClientRect().height;
 }
 
-function renderMeasuredSubsection(subsection, blocks, continued = false, frameClass = "") {
-  const node = makeSubsection(subsection, blocks, continued);
+function renderMeasuredSubsection(subsection, blocks, continued = false, frameClass = "", parent = null) {
+  const rendered = makeSubsectionWithParentContext(subsection, blocks, continued, parent);
   return {
-    node,
-    height: measure(node.cloneNode(true), frameClass),
+    ...rendered,
+    height: measure(rendered.node.cloneNode(true), frameClass),
   };
+}
+
+function measureSubsectionPair(first, second, frameClass = "") {
+  const container = document.createElement("div");
+  container.className = `measurement-content ${frameClass}`.trim();
+  container.append(first.cloneNode(true), second.cloneNode(true));
+  els.measurement.replaceChildren(container);
+  return container.getBoundingClientRect().height;
 }
 
 function hasMinimumStartCopy(subsection, block, frameClass = "") {
@@ -684,7 +1137,7 @@ function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings
       return;
     }
 
-    if (block.type === "paragraph") {
+    if (block.type === "paragraph" && !block.hasSoftBreak) {
       fragments.push(...fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings, frameClass));
       return;
     }
@@ -836,11 +1289,7 @@ function makeOrientationPage(data = {}) {
       <small>${escapeHtml(emotionsClosing)}</small>
     </article>
     <article class="orientation-card orientation-confidentiality">
-      <span class="orientation-conf-icon" aria-hidden="true">
-        <img src="assets/icons/orientation-conf-composite-1.svg" alt="">
-        <img src="assets/icons/orientation-conf-composite-2.svg" alt="">
-        <img src="assets/icons/orientation-conf-composite-3.svg" alt="">
-      </span>
+      <img class="orientation-conf-icon" src="assets/icons/confidential.svg" alt="">
       <img class="orientation-card-asterisk" src="assets/icons/orientation-card-asterisk.svg" alt="">
       <p>${escapeHtml(summary.confidentiality).replace(/\byou\b/i, "<u>$&</u>")}</p>
     </article>
@@ -960,9 +1409,11 @@ function paginate() {
     const makeContentPage = (showChapterTitle) => {
       const frameNumber = output.length + 1;
       const page = makePaper(chapter, showChapterTitle, pageNumber++);
+      const measurementFrameClass = isLiveDocument ? "" : getLegacyFrameClass(frameNumber);
       return {
         ...page,
-        measurementFrameClass: isLiveDocument ? "" : getLegacyFrameClass(frameNumber),
+        measurementFrameClass,
+        maxHeight: measurementFrameClass === "letter-124" ? maxHeight - 10 : maxHeight,
       };
     };
 
@@ -974,20 +1425,67 @@ function paginate() {
       output.push(current.paper);
     };
 
+    const carryParentHeadingAnchor = (parentId) => {
+      const anchor = current.content.lastElementChild;
+      if (
+        !parentId
+        || !anchor?.classList.contains("is-heading-anchor")
+        || anchor.dataset.subsection !== parentId
+        || current.content.childElementCount < 2
+      ) return false;
+
+      const anchorHeight = measure(anchor.cloneNode(true), current.measurementFrameClass);
+      current.content.removeChild(anchor);
+      nextPage();
+      current.content.append(anchor);
+      current.used = anchorHeight;
+      return true;
+    };
+
     chapter.subsections.forEach((subsection, subsectionIndex) => {
       if (subsection.pageBreakBefore && current.used > 0) nextPage();
       const startsContinued = subsection.startsContinued === true;
-      let complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued, current.measurementFrameClass);
+      const parentSubsection = subsection.depth === 3
+        ? chapter.subsections.find((candidate) => candidate.id === subsection.parentId)
+        : null;
+      const renderSubsection = (blocks, continued, frameClass = current.measurementFrameClass) => (
+        renderMeasuredSubsection(
+          subsection,
+          blocks,
+          continued,
+          frameClass,
+          continued ? parentSubsection : null,
+        )
+      );
+      let complete = renderSubsection(subsection.blocks, startsContinued);
       const nextSubsection = chapter.subsections[subsectionIndex + 1];
+
+      // A Google Docs page break can land on the first body block beneath an
+      // empty H2. In that case the break belongs before the H2, not between the
+      // H2 and its H3, otherwise the H2 is stranded by itself.
+      if (
+        subsection.anchorsNextHeading
+        && nextSubsection
+        && (nextSubsection.pageBreakBefore || nextSubsection.blocks[0]?.pageBreakBefore)
+      ) {
+        if (current.used > 0) nextPage();
+        nextSubsection.pageBreakBefore = false;
+        if (nextSubsection.blocks[0]) nextSubsection.blocks[0].pageBreakBefore = false;
+        complete = renderSubsection(subsection.blocks, startsContinued);
+      }
+
       if (subsection.anchorsNextHeading && nextSubsection && current.used > 0) {
         const nextPreviewBlocks = nextSubsection.blocks.length ? [nextSubsection.blocks[0]] : [];
-        const nextPreviewHeight = measure(makeSubsection(nextSubsection, nextPreviewBlocks, false), current.measurementFrameClass);
-        if (complete.height + nextPreviewHeight > maxHeight - current.used) {
+        const nextPreview = makeSubsection(nextSubsection, nextPreviewBlocks, false);
+        // Keep an H2 with the start of its H3. Measuring them together mirrors
+        // the actual page flow and prevents an H2 from being stranded alone.
+        const pairedHeight = measureSubsectionPair(complete.node, nextPreview, current.measurementFrameClass);
+        if (pairedHeight > current.maxHeight - current.used) {
           nextPage();
-          complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued, current.measurementFrameClass);
+          complete = renderSubsection(subsection.blocks, startsContinued);
         }
       }
-      const available = maxHeight - current.used;
+      const available = current.maxHeight - current.used;
 
       const hasForcedBlockBreak = subsection.blocks.some((block) => block.pageBreakBefore);
       if (!hasForcedBlockBreak && complete.height <= available) {
@@ -996,7 +1494,7 @@ function paginate() {
         return;
       }
 
-      let remaining = fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings, current.measurementFrameClass);
+      let remaining = fragmentSubsectionBlocks(subsection, current.maxHeight, warnings, fatalWarnings, current.measurementFrameClass);
       let continued = startsContinued;
 
       while (remaining.length) {
@@ -1004,9 +1502,10 @@ function paginate() {
           current.used > 0
           && (
             remaining[0].pageBreakBefore
-            || renderMeasuredSubsection(subsection, [remaining[0]], continued, current.measurementFrameClass).height > maxHeight - current.used
+            || renderSubsection([remaining[0]], continued).height > current.maxHeight - current.used
           )
         ) {
+          if (!continued && carryParentHeadingAnchor(subsection.parentId)) continue;
           nextPage();
         }
 
@@ -1014,8 +1513,8 @@ function paginate() {
         let selectedHeight = 0;
         for (const block of remaining) {
           if (selected.length && block.pageBreakBefore) break;
-          const candidate = renderMeasuredSubsection(subsection, [...selected, block], continued, current.measurementFrameClass);
-          if (candidate.height <= maxHeight - current.used || selected.length === 0) {
+          const candidate = renderSubsection([...selected, block], continued);
+          if (candidate.height <= current.maxHeight - current.used || selected.length === 0) {
             selected.push(block);
             selectedHeight = candidate.height;
           } else {
@@ -1029,13 +1528,14 @@ function paginate() {
           && selectedBlocks.length === 1
           && !hasMinimumStartCopy(subsection, selectedBlocks[0], current.measurementFrameClass);
         if (leavesOneLineLeadIn) {
+          if (!continued && carryParentHeadingAnchor(subsection.parentId)) continue;
           nextPage();
           continue;
         }
 
-        const fragment = renderMeasuredSubsection(subsection, selected, continued, current.measurementFrameClass).node;
-        fragment.classList.toggle("continues-next-page", remaining.length > selected.length);
-        current.content.append(fragment);
+        const fragment = renderSubsection(selected, continued);
+        fragment.subsectionNode.classList.toggle("continues-next-page", remaining.length > selected.length);
+        current.content.append(fragment.node);
         current.used += selectedHeight;
         remaining = remaining.slice(selected.length);
 
@@ -1048,6 +1548,10 @@ function paginate() {
   });
 
   els.pages.replaceChildren(...makePageComparisons(output, isLiveDocument));
+  renderPlacedIllustrations();
+  initializeIllustrationDragging();
+  initializeIllustrationResizing();
+  initializeIllustrationDropTargets();
   centerPreviewPages();
   els.warnings.textContent = warnings.join(" ");
   els.warnings.classList.toggle("is-visible", warnings.length > 0);
@@ -1080,6 +1584,7 @@ async function importAndRender() {
   if (!docsUrl) {
     els.docsUrl.setAttribute("aria-invalid", "true");
     els.importSummary.textContent = "Paste a valid Google Docs link to continue.";
+    els.importSummary.hidden = false;
     return;
   }
   els.docsUrl.removeAttribute("aria-invalid");
@@ -1087,7 +1592,7 @@ async function importAndRender() {
   els.docsLink.href = docsUrl;
   syncDocsPreview(docsUrl);
   setImportBusy(true);
-  els.importSummary.textContent = "Fetching and formatting the Google Doc…";
+  els.importSummary.hidden = true;
 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 30000);
@@ -1106,29 +1611,14 @@ async function importAndRender() {
     importedSpecialPages = transformed.specialPages;
     isLiveDocument = true;
     paginate();
-    const subsectionCount = documentModel.chapters.reduce((sum, chapter) => sum + chapter.subsections.length, 0);
-    const chapterCount = documentModel.chapters.length;
-    const notes = [];
-    if (transformed.specialPages.length) {
-      const labels = transformed.specialPages.map((page) => ({
-        cover: "Cover",
-        "summary-graphic": "Summary Graphic",
-        letter: "Letter",
-      })[page.type]);
-      notes.push(`Applied ${labels.join(", ")} page ${labels.length === 1 ? "style" : "styles"}.`);
-    }
-    if (!transformed.specialPages.some((page) => page.type === "summary-graphic")) {
-      notes.push("No [Summary Graphic] directive; skipped that page.");
-    }
-    if (transformed.ignoredRedNodes) notes.push(`Ignored ${transformed.ignoredRedNodes} red text ${transformed.ignoredRedNodes === 1 ? "run" : "runs"}.`);
-    if (transformed.pageBreakDirectives) notes.push(`Applied ${transformed.pageBreakDirectives} manual page ${transformed.pageBreakDirectives === 1 ? "break" : "breaks"}.`);
-    if (transformed.importedImages) notes.push(`Imported ${transformed.importedImages} embedded ${transformed.importedImages === 1 ? "image" : "images"}.`);
-    els.importSummary.textContent = `Imported ${chapterCount} chapters and ${subsectionCount} subsections from “${transformed.title}”. ${notes.join(" ")}`.trim();
+    els.importSummary.textContent = "";
+    els.importSummary.hidden = true;
   } catch (error) {
     const message = error.name === "AbortError"
       ? "The document took too long to respond. Try again."
       : error.message;
     els.importSummary.textContent = `${message} The current preview was left unchanged.`;
+    els.importSummary.hidden = false;
   } finally {
     window.clearTimeout(timeout);
     setImportBusy(false);
@@ -1156,6 +1646,22 @@ function setPreviewZoom(value) {
 
 els.importButton.addEventListener("click", importAndRender);
 els.refreshButton.addEventListener("click", importAndRender);
+els.saveIllustrations.addEventListener("click", saveIllustrations);
+els.illustrationInput.addEventListener("change", async () => {
+  await addIllustrationFiles(els.illustrationInput.files);
+  els.illustrationInput.value = "";
+});
+els.illustrationLibrary.addEventListener("dragover", (event) => {
+  if (![...event.dataTransfer.types].includes("Files")) return;
+  event.preventDefault();
+  els.illustrationLibrary.classList.add("is-drop-target");
+});
+els.illustrationLibrary.addEventListener("dragleave", () => els.illustrationLibrary.classList.remove("is-drop-target"));
+els.illustrationLibrary.addEventListener("drop", async (event) => {
+  event.preventDefault();
+  els.illustrationLibrary.classList.remove("is-drop-target");
+  await addIllustrationFiles(event.dataTransfer.files);
+});
 els.docsUrl.addEventListener("keydown", (event) => {
   if (event.key === "Enter") importAndRender();
 });
@@ -1200,11 +1706,13 @@ els.printButton.addEventListener("click", () => window.print());
 
 els.docsLink.href = normalizeGoogleDocsUrl(els.docsUrl.value);
 syncDocsPreview();
-document.fonts.ready.then(() => {
+restoreSavedIllustrations();
+renderIllustrationLibrary();
+document.fonts.ready.then(async () => {
   els.source.innerHTML = sampleSource;
   documentModel = parseSource();
   importedSpecialPages = [];
   isLiveDocument = false;
   paginate();
-  els.importSummary.textContent = "Paste a Google Docs link to replace the bundled reference packet.";
+  await importAndRender();
 });

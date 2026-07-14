@@ -26,7 +26,7 @@
   --page-width: 612px;
   --page-height: 792px;
   --content-width: 520px;
-  --content-height: 585px;
+  --content-height: 600px;
 }
 
 * {
@@ -229,6 +229,76 @@ textarea:focus {
   margin: -4px 0 0;
 }
 
+.source-intro-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.source-intro-row .settings-section-intro {
+  flex: 1;
+}
+
+.import-help {
+  position: relative;
+  flex: none;
+}
+
+.import-help > summary {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid #999;
+  border-radius: 50%;
+  color: #555;
+  cursor: help;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  list-style: none;
+}
+
+.import-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.import-help > summary:hover,
+.import-help[open] > summary {
+  border-color: #111;
+  color: #111;
+}
+
+.import-help-popover {
+  position: absolute;
+  z-index: 10;
+  top: 26px;
+  right: 0;
+  width: 275px;
+  padding: 10px 12px;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  color: #555;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.import-help-popover p {
+  margin: 0;
+}
+
+.import-help-popover p + p {
+  margin-top: 8px;
+}
+
+.import-help-popover code {
+  color: #222;
+  font-size: 10px;
+}
+
 .page-directive-note {
   margin-top: 8px;
 }
@@ -241,6 +311,92 @@ textarea:focus {
 
 .source-link-control {
   gap: 7px;
+}
+
+.illustration-upload-control {
+  margin-top: 14px;
+}
+
+.illustration-upload-control input {
+  height: auto;
+  padding: 7px;
+  font-size: 11px;
+}
+
+.illustration-library {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 86px;
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px dashed #bdbdbd;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.illustration-library.is-drop-target {
+  border-color: #111;
+  background: #f1f1f1;
+}
+
+.illustration-library-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  margin: 0;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.illustration-library-item {
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: grab;
+}
+
+.illustration-library-item.is-dragging {
+  opacity: 0.45;
+}
+
+.illustration-library-item img {
+  display: block;
+  width: 100%;
+  height: 58px;
+  object-fit: contain;
+}
+
+.illustration-library-item p {
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: #555;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.illustration-save-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.illustration-save-status {
+  margin: 0;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.illustration-save-status.is-dirty {
+  color: #9b5b12;
 }
 
 .source-link-control input[aria-invalid="true"] {
@@ -716,36 +872,12 @@ textarea:focus {
 
 .orientation-conf-icon {
   position: absolute;
-  top: 28.5px;
-  left: 116.84px;
-  width: 33.72px;
-  height: 23.264px;
+  top: 28.63px;
+  left: 117px;
+  width: 29px;
+  height: 22px;
 }
 
-.orientation-conf-icon img {
-  position: absolute;
-  object-fit: contain;
-}
-
-.orientation-conf-icon img:nth-child(1) {
-  top: 3.4px;
-  left: 3.66px;
-  width: 24.833px;
-  height: 19.082px;
-}
-
-.orientation-conf-icon img:nth-child(2) {
-  top: 15.45px;
-  left: 0.72px;
-  width: 9.949px;
-  height: 8.703px;
-}
-
-.orientation-conf-icon img:nth-child(3) {
-  inset: 0;
-  width: 33.72px;
-  height: 23.264px;
-}
 
 .orientation-card-asterisk {
   position: absolute;
@@ -1014,6 +1146,15 @@ textarea:focus {
   padding-bottom: 28px;
 }
 
+/* An empty H2 that introduces an H3 keeps an 18px heading-to-heading gap. */
+.subsection.is-heading-anchor {
+  padding-bottom: 12px;
+}
+
+.subsection.parent-continuation {
+  padding-bottom: 12px;
+}
+
 .subsection-level-3 {
   padding-bottom: 16px;
 }
@@ -1025,6 +1166,7 @@ textarea:focus {
 .subsection.is-nested {
   position: relative;
   padding-left: 12px;
+  padding-bottom: 18px;
 }
 
 .subsection.is-nested::before {
@@ -1112,6 +1254,15 @@ textarea:focus {
   margin-bottom: 0;
 }
 
+/* Keep body-copy rhythm consistent across all page-specific frame refinements. */
+.page-content p.content-block {
+  margin-bottom: 8px !important;
+}
+
+.page-content p.content-block:last-child {
+  margin-bottom: 0 !important;
+}
+
 .content-block strong {
   color: #000;
   font-weight: 500;
@@ -1124,6 +1275,22 @@ textarea:focus {
 .content-list li {
   margin: 0 0 5px;
   padding-left: 1px;
+}
+
+/* Preserve Google Docs list hierarchy without the browser's oversized nested-list indent. */
+.content-list li > ul,
+.content-list li > ol {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.content-list li > ul {
+  list-style-type: circle;
+}
+
+.content-list li > ul > li,
+.content-list li > ol > li {
+  margin-bottom: 0;
 }
 
 .content-table {
@@ -1172,6 +1339,29 @@ textarea:focus {
 
 .content-table li {
   margin: 0;
+}
+
+/* Figma 1 × 3 information cards use a slightly roomier 15.5px vertical inset. */
+.content-table.table-single-column {
+  margin-bottom: 14px;
+}
+
+.content-table.table-single-column th,
+.content-table.table-single-column td {
+  padding: 15.5px 19px;
+}
+
+.content-table p {
+  margin: 0;
+}
+
+.content-table.table-single-column tr:nth-child(2) > * {
+  padding-top: 16px;
+  padding-bottom: 15px;
+}
+
+.content-table.table-single-column:last-child {
+  margin-bottom: 0;
 }
 
 .table-gap {
@@ -1276,6 +1466,135 @@ textarea:focus {
 
 .content-image {
   margin: 0 0 12px;
+}
+
+.preview-illustration {
+  --illustration-x: 0px;
+  --illustration-y: 0px;
+  position: relative;
+  z-index: 2;
+  cursor: grab;
+  touch-action: none;
+  transform: translate(var(--illustration-x), var(--illustration-y));
+  transition: box-shadow 120ms ease, outline-color 120ms ease;
+}
+
+.preview-illustration:focus-visible,
+.preview-illustration:hover {
+  outline: 1px dashed #777;
+  outline-offset: 5px;
+}
+
+.preview-illustration::after {
+  position: absolute;
+  top: -25px;
+  left: 0;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: #111;
+  color: #fff;
+  content: "Drag to place";
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.preview-illustration:hover::after,
+.preview-illustration:focus-visible::after {
+  opacity: 1;
+}
+
+.preview-illustration.is-dragging {
+  cursor: grabbing;
+  outline: 1px dashed #111;
+  outline-offset: 5px;
+  transition: none;
+  user-select: none;
+}
+
+.placed-illustration {
+  position: absolute;
+  z-index: 3;
+  width: 132px;
+  margin: 0;
+}
+
+.placed-illustration img {
+  width: 100%;
+}
+
+.placed-illustration::after {
+  content: "Drag to place · pull corner to resize";
+}
+
+.illustration-remove {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  display: grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #111;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font: 16px/1 Inter, sans-serif;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.placed-illustration:hover .illustration-remove,
+.placed-illustration:focus-within .illustration-remove,
+.placed-illustration:hover .illustration-resize,
+.placed-illustration:focus-within .illustration-resize {
+  opacity: 1;
+}
+
+.illustration-resize {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #111;
+  border-radius: 2px;
+  background: #fff;
+  cursor: nwse-resize;
+  opacity: 0;
+  touch-action: none;
+  transition: opacity 120ms ease;
+}
+
+.illustration-resize::before {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #111;
+  border-bottom: 2px solid #111;
+  content: "";
+}
+
+.placed-illustration.is-resizing {
+  cursor: nwse-resize;
+  outline: 1px dashed #111;
+  outline-offset: 5px;
+  transition: none;
+  user-select: none;
+}
+
+.paper.is-illustration-drop-target {
+  outline: 2px dashed #111;
+  outline-offset: -8px;
 }
 
 .content-image img {
@@ -1921,6 +2240,23 @@ textarea:focus {
   .paper {
     zoom: 1.333333;
     box-shadow: none;
+  }
+
+  .preview-illustration {
+    cursor: auto;
+  }
+
+  .preview-illustration::after {
+    display: none;
+  }
+
+  .illustration-remove,
+  .illustration-resize {
+    display: none;
+  }
+
+  .paper.is-illustration-drop-target {
+    outline: 0;
   }
 
   body.has-fatal-overflow .pages {

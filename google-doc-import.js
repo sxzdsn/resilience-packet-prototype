@@ -90,6 +90,132 @@ function makeCardGridSourceBlock(table) {
   return grid;
 }
 
+function makeThreeRowInformationTableSourceBlock(table) {
+  const rows = [...table.rows];
+  if (rows.length !== 3) return null;
+  const meaningfulCells = (row) => [...row.cells].filter((cell) => (
+    cell.textContent.trim() || cell.querySelector("img, br")
+  ));
+  const [headerCells, detailCells] = rows.slice(0, 2).map(meaningfulCells);
+  if (headerCells.length !== 1 || detailCells.length !== 1) return null;
+
+  const informationTable = table.cloneNode(true);
+  const citationColumnCount = Math.max(informationTable.rows[2]?.cells.length || 0, 1);
+  [0, 1].forEach((rowIndex) => {
+    const row = informationTable.rows[rowIndex];
+    const sourceCell = meaningfulCells(row)[0];
+    const cell = table.ownerDocument.createElement(rowIndex === 0 ? "th" : "td");
+    cell.colSpan = citationColumnCount;
+    cell.innerHTML = sourceCell.innerHTML;
+    row.replaceChildren(cell);
+  });
+  return informationTable;
+}
+
+function declaredIndent(declarations, property) {
+  const match = declarations.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*(-?[\\d.]+)(?:pt|px)?`, "i"));
+  return match ? Math.max(0, Number(match[1])) : 0;
+}
+
+function listIndent(list, styleMap) {
+  const item = list.querySelector(":scope > li");
+  if (!item) return 0;
+  const declarations = styleDeclarations(item, styleMap);
+  return declaredIndent(declarations, "margin-left")
+    + declaredIndent(declarations, "padding-left");
+}
+
+function appendListItems(target, source) {
+  [...source.children].forEach((item) => target.append(item.cloneNode(true)));
+}
+
+function normalizeAdjacentLists(nodes, styleMap) {
+  const normalized = [];
+  for (let start = 0; start < nodes.length;) {
+    const node = nodes[start];
+    if (!/^(?:UL|OL)$/.test(node.tagName)) {
+      normalized.push(node);
+      start += 1;
+      continue;
+    }
+
+    let end = start + 1;
+    while (end < nodes.length && /^(?:UL|OL)$/.test(nodes[end].tagName)) end += 1;
+    const run = nodes.slice(start, end);
+    const levels = [...new Set(run.map((list) => listIndent(list, styleMap)))].sort((a, b) => a - b);
+    const listsByLevel = [];
+    const roots = [];
+
+    run.forEach((source) => {
+      const level = levels.indexOf(listIndent(source, styleMap));
+      const list = source.cloneNode(true);
+      const existing = listsByLevel[level];
+
+      if (existing && existing.tagName === list.tagName) {
+        appendListItems(existing, list);
+        listsByLevel.length = level + 1;
+        return;
+      }
+
+      if (level > 0) {
+        const parentList = listsByLevel[level - 1];
+        const parentItem = parentList?.lastElementChild;
+        if (parentItem) {
+          parentItem.append(list);
+          listsByLevel[level] = list;
+          listsByLevel.length = level + 1;
+          return;
+        }
+      }
+
+      roots.push(list);
+      listsByLevel[level] = list;
+      listsByLevel.length = level + 1;
+    });
+
+    normalized.push(...roots);
+    start = end;
+  }
+  return normalized;
+}
+
+function splitHeadingAtDoubleLineBreak(node) {
+  if (!/^H[3-6]$/.test(node.tagName)) return null;
+  const breakPattern = /(?:<br\b[^>]*>\s*){2,}/i;
+  if (!breakPattern.test(node.innerHTML)) return null;
+
+  const document = node.ownerDocument;
+  const isMeaningful = (html) => {
+    const probe = document.createElement("div");
+    probe.innerHTML = html;
+    return Boolean(probe.textContent.trim());
+  };
+  const groups = node.innerHTML.split(breakPattern).filter(isMeaningful);
+  if (groups.length < 2) return null;
+
+  const firstGroupLines = groups.shift().split(/<br\b[^>]*>/i);
+  const headingHtml = firstGroupLines.shift()?.trim();
+  if (!isMeaningful(headingHtml || "")) return null;
+
+  const heading = document.createElement("h3");
+  heading.innerHTML = headingHtml;
+  const nodes = [heading];
+  const nestedCopy = firstGroupLines.join("<br>").trim();
+  if (isMeaningful(nestedCopy)) {
+    const paragraph = document.createElement("p");
+    paragraph.innerHTML = nestedCopy;
+    nodes.push(paragraph);
+  }
+
+  groups.forEach((group, index) => {
+    const paragraph = document.createElement("p");
+    paragraph.innerHTML = group;
+    if (index === 0) paragraph.dataset.breakOutOfNested = "true";
+    nodes.push(paragraph);
+  });
+  return nodes;
+}
+
 function safeImageSource(value) {
   return /^(?:https:\/\/|data:image\/(?:png|jpe?g|gif|webp);base64,)/i.test(value || "");
 }
@@ -419,6 +545,11 @@ export function transformGoogleDocExport(html, options = {}) {
     }
     preserveGoogleInlineStyles(node, styleMap, ignoreRedText);
     ignoredRedNodes += ignoreRedText ? redBefore : 0;
+    const headingSplit = splitHeadingAtDoubleLineBreak(node);
+    if (headingSplit) {
+      pushImported(...headingSplit);
+      return;
+    }
     const imageBlocks = makeImageSourceBlocks(node);
     if (imageBlocks.length) {
       pushImported(...imageBlocks);
@@ -439,7 +570,7 @@ export function transformGoogleDocExport(html, options = {}) {
     }
 
     if (node.tagName === "TABLE") {
-      pushImported(makeCardGridSourceBlock(node));
+      pushImported(makeThreeRowInformationTableSourceBlock(node) || makeCardGridSourceBlock(node));
       return;
     }
 
@@ -455,16 +586,18 @@ export function transformGoogleDocExport(html, options = {}) {
     imported.unshift(heading);
   }
 
-  imported.forEach((node, index) => {
-    if (node.tagName !== "H1" || imported[index + 1]?.tagName !== "P") return;
-    const nextStructuralNode = imported.slice(index + 2).find((candidate) => candidate.textContent.trim());
+  const normalizedImported = normalizeAdjacentLists(imported, styleMap);
+
+  normalizedImported.forEach((node, index) => {
+    if (node.tagName !== "H1" || normalizedImported[index + 1]?.tagName !== "P") return;
+    const nextStructuralNode = normalizedImported.slice(index + 2).find((candidate) => candidate.textContent.trim());
     if (nextStructuralNode && /^H[2-6]$/.test(nextStructuralNode.tagName)) {
-      imported[index + 1].dataset.role = "chapter-dek";
+      normalizedImported[index + 1].dataset.role = "chapter-dek";
     }
   });
 
   return {
-    nodes: imported,
+    nodes: normalizedImported,
     title: doc.title.trim() || "Imported document",
     importedImages,
     ignoredRedNodes,

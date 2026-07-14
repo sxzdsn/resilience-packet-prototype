@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resilience Packet — Style System</title>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="style-guide.css?v=20260713-13" />
+    <link rel="stylesheet" href="style-guide.css?v=20260714-01" />
   </head>
   <body class="guide-body">
     <header class="guide-header">
@@ -176,9 +176,62 @@
         <div class="guide-section-heading pagination-section-heading">
           <div>
             <h2>Pagination rules</h2>
-            <p>A red <code>&lt;page break&gt;</code> directive tells the template to begin the following content on a new page.</p>
+            <p>The publisher fills each page with the next complete piece of content, then begins a new page only at a safe reading boundary. A red <code>&lt;page break&gt;</code> directive gives editors a deliberate exception when a new section needs its own page.</p>
           </div>
         </div>
+
+        <figure class="pagination-demo" aria-labelledby="pagination-demo-title">
+          <div class="pagination-demo-source">
+            <figcaption id="pagination-demo-title" class="pagination-demo-label">In Google Docs</figcaption>
+            <div class="pagination-doc-page">
+              <div class="pagination-doc-toolbar" aria-hidden="true"><span></span><span></span><span></span></div>
+              <div class="pagination-doc-content">
+                <span class="pagination-format-label">Heading 1</span>
+                <h2 class="pagination-doc-chapter-title">Hospital Visit</h2>
+                <span class="pagination-format-label">Heading 2</span>
+                <h3>What to expect</h3>
+                <p>A Resilience advocate can meet you at the hospital and explain your options.</p>
+                <div class="pagination-double-break">
+                  <div class="pagination-empty-line"></div>
+                  <code class="pagination-page-break-directive">&lt;page break&gt;</code>
+                  <div class="pagination-empty-line"></div>
+                  <span class="pagination-enter-label" aria-hidden="true"><kbd>⌘</kbd><kbd>↵</kbd></span>
+                </div>
+                <span class="pagination-format-label">Heading 2</span>
+                <h3>Before you leave</h3>
+                <p>Ask for any information or support you need before leaving the hospital.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="pagination-demo-transfer" aria-hidden="true">
+            <span>Publish</span>
+            <svg viewBox="0 0 76 18" focusable="false"><path d="M1 9h67M61 3l7 6-7 6" /></svg>
+          </div>
+
+          <div class="pagination-demo-result">
+            <div class="pagination-demo-label">In the packet</div>
+            <div class="pagination-result-pages" aria-label="Resulting packet pages">
+              <article class="pagination-result-page" aria-label="Packet page before the page break">
+                <h3 class="pagination-page-chapter-title">Hospital Visit</h3>
+                <div class="pagination-page-content">
+                  <h3>What to expect</h3>
+                  <p>A Resilience advocate can meet you at the hospital and explain your options.</p>
+                  <div class="pagination-page-space"><span>Available page space</span></div>
+                </div>
+                <footer class="pagination-page-footer"><span>Hospital Visit</span><span>10</span></footer>
+              </article>
+              <article class="pagination-result-page" aria-label="Packet page after the page break">
+                <div class="pagination-page-content">
+                  <h3>Before you leave</h3>
+                  <p>Ask for any information or support you need before leaving the hospital.</p>
+                  <span class="pagination-moved-label">New page from page break</span>
+                </div>
+                <footer class="pagination-page-footer"><span>Hospital Visit</span><span>11</span></footer>
+              </article>
+            </div>
+          </div>
+        </figure>
 
         <div class="rule-grid">
           <article class="rule-card rule-card-primary">
@@ -195,7 +248,7 @@
           <article class="rule-card">
             <div class="rule-number">CONTINUE</div>
             <h3>Repeat context</h3>
-            <p>When a Heading 3 subsection continues onto a new page, repeat its own title with a continued badge. Its Heading 2 parent does not repeat.</p>
+            <p>When a section continues onto a new page, repeat its own heading with a continued badge unless the source specifies a header or none continuation variant. A nested Heading 3 continuation also repeats its Heading 2 parent for context.</p>
           </article>
           <article class="rule-card">
             <div class="rule-number">RESERVE</div>
@@ -205,12 +258,12 @@
           <article class="rule-card">
             <div class="rule-number">FORCE</div>
             <h3>Honor explicit breaks</h3>
-            <p>Editors can force a fresh page before a subsection when the narrative or legal structure benefits from a deliberate transition.</p>
+            <p>Place a red <code>&lt;page break&gt;</code> on its own line before the content that needs a fresh page. The directive is control metadata and never appears in the packet.</p>
           </article>
           <article class="rule-card">
             <div class="rule-number">WARN</div>
             <h3>Block unsafe export</h3>
-            <p>An indivisible component taller than the 585px content area produces a fatal warning and disables PDF export until the content is corrected.</p>
+            <p>A sentence or clause, list item, table row, or other indivisible component taller than the 585px content area produces a fatal warning and disables PDF export until it is corrected.</p>
           </article>
         </div>
 
