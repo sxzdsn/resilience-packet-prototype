@@ -22,13 +22,17 @@ const LEGACY_FRAME_CLASSES = {
   25: 137,
 };
 
+export function getLegacyFrameClass(pageNumber) {
+  const frameClass = LEGACY_FRAME_CLASSES[pageNumber];
+  return frameClass ? `letter-${frameClass}` : "";
+}
+
 function decoratePaper(paper, index, isLiveDocument) {
   const pageNumber = index + 1;
   const pageLabel = String(pageNumber).padStart(2, "0");
   paper.classList.add(isLiveDocument ? `imported-page-${pageLabel}` : `page-${pageLabel}`);
-  if (!isLiveDocument && LEGACY_FRAME_CLASSES[pageNumber]) {
-    paper.classList.add(`letter-${LEGACY_FRAME_CLASSES[pageNumber]}`);
-  }
+  const legacyFrameClass = isLiveDocument ? "" : getLegacyFrameClass(pageNumber);
+  if (legacyFrameClass) paper.classList.add(legacyFrameClass);
   paper.dataset.figmaFrame = pageLabel;
 }
 

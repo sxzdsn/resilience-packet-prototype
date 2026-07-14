@@ -1,5 +1,5 @@
 import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260713-15";
-import { makePageComparisons } from "./figma-comparison.js?v=20260713-01";
+import { getLegacyFrameClass, makePageComparisons } from "./figma-comparison.js?v=20260713-01";
 
 const sampleSource = window.RESILIENCE_PACKET_SOURCE;
 
@@ -547,28 +547,28 @@ function makeSubsection(subsection, blocks, continued = false) {
   return wrapper;
 }
 
-function measure(node) {
+function measure(node, frameClass = "") {
   const container = document.createElement("div");
-  container.className = "measurement-content";
+  container.className = `measurement-content ${frameClass}`.trim();
   container.append(node);
   els.measurement.replaceChildren(container);
   return container.getBoundingClientRect().height;
 }
 
-function renderMeasuredSubsection(subsection, blocks, continued = false) {
+function renderMeasuredSubsection(subsection, blocks, continued = false, frameClass = "") {
   const node = makeSubsection(subsection, blocks, continued);
   return {
     node,
-    height: measure(node.cloneNode(true)),
+    height: measure(node.cloneNode(true), frameClass),
   };
 }
 
-function hasMinimumStartCopy(subsection, block) {
+function hasMinimumStartCopy(subsection, block, frameClass = "") {
   if (block.type !== "paragraph") return true;
 
   const subsectionNode = makeSubsection(subsection, [block]);
   const container = document.createElement("div");
-  container.className = "measurement-content";
+  container.className = `measurement-content ${frameClass}`.trim();
   container.append(subsectionNode);
   els.measurement.replaceChildren(container);
 
@@ -606,7 +606,7 @@ function plainText(html) {
   return container.textContent.trim();
 }
 
-function splitAtSafeClauseBoundaries(subsection, sentence) {
+function splitAtSafeClauseBoundaries(subsection, sentence, frameClass = "") {
   const clauses = [];
   let start = 0;
 
@@ -624,11 +624,11 @@ function splitAtSafeClauseBoundaries(subsection, sentence) {
   const everyClauseHasTwoLines = clauses.every((clause) => hasMinimumStartCopy(subsection, {
     type: "paragraph",
     html: escapeHtml(clause),
-  }));
+  }, frameClass));
   return everyClauseHasTwoLines ? clauses : [sentence];
 }
 
-function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings) {
+function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings, frameClass = "") {
   const text = plainText(block.html);
   const segmenter = typeof Intl?.Segmenter === "function"
     ? new Intl.Segmenter(undefined, { granularity: "sentence" })
@@ -636,7 +636,7 @@ function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, ma
   const sentences = segmenter
     ? [...segmenter.segment(text)].map(({ segment }) => segment).filter((segment) => segment.trim())
     : text.match(/[^.!?]+[.!?]+\s*|[^.!?]+$/g)?.filter((segment) => segment.trim()) || [text];
-  const fragments = sentences.flatMap((sentence) => splitAtSafeClauseBoundaries(subsection, sentence));
+  const fragments = sentences.flatMap((sentence) => splitAtSafeClauseBoundaries(subsection, sentence, frameClass));
 
   if (fragments.length < 2) return [block];
 
@@ -649,7 +649,7 @@ function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, ma
       blankLinesBefore: fragmentIndex === 0 ? block.blankLinesBefore : 0,
       pageBreakBefore: fragmentIndex === 0 ? block.pageBreakBefore : false,
     };
-    const fragmentHeight = renderMeasuredSubsection(subsection, [fragmentBlock]).height;
+    const fragmentHeight = renderMeasuredSubsection(subsection, [fragmentBlock], false, frameClass).height;
     if (fragmentHeight > maxHeight) {
       const message = `A single sentence or clause in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
       warnings.push(message);
@@ -659,7 +659,7 @@ function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, ma
   });
 }
 
-function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings) {
+function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings, frameClass = "") {
   const fragments = [];
   subsection.blocks.forEach((block, blockIndex) => {
     if (block.type === "list" && block.items.length > 1) {
@@ -673,7 +673,7 @@ function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings
           blankLinesBefore: itemIndex === 0 ? block.blankLinesBefore : 0,
           pageBreakBefore: itemIndex === 0 ? block.pageBreakBefore : false,
         };
-        const itemHeight = renderMeasuredSubsection(subsection, [itemBlock]).height;
+        const itemHeight = renderMeasuredSubsection(subsection, [itemBlock], false, frameClass).height;
         if (itemHeight > maxHeight) {
           const message = `A single list item in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
           warnings.push(message);
@@ -685,7 +685,7 @@ function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings
     }
 
     if (block.type === "paragraph") {
-      fragments.push(...fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings));
+      fragments.push(...fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings, frameClass));
       return;
     }
 
@@ -703,7 +703,7 @@ function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings
             blankLinesBefore: rowIndex === 0 ? block.blankLinesBefore : 0,
             pageBreakBefore: rowIndex === 0 ? block.pageBreakBefore : false,
           };
-          const rowHeight = renderMeasuredSubsection(subsection, [rowBlock]).height;
+          const rowHeight = renderMeasuredSubsection(subsection, [rowBlock], false, frameClass).height;
           if (rowHeight > maxHeight) {
             const message = `A single table row in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
             warnings.push(message);
@@ -715,7 +715,7 @@ function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings
       }
     }
 
-    const height = renderMeasuredSubsection(subsection, [block]).height;
+    const height = renderMeasuredSubsection(subsection, [block], false, frameClass).height;
     fragments.push(block);
     if (height > maxHeight) {
       const message = `A single ${block.type} in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
@@ -957,25 +957,34 @@ function paginate() {
   let pageNumber = showBundledContents ? 4 : 3;
 
   documentModel.chapters.forEach((chapter) => {
-    let current = makePaper(chapter, true, pageNumber++);
+    const makeContentPage = (showChapterTitle) => {
+      const frameNumber = output.length + 1;
+      const page = makePaper(chapter, showChapterTitle, pageNumber++);
+      return {
+        ...page,
+        measurementFrameClass: isLiveDocument ? "" : getLegacyFrameClass(frameNumber),
+      };
+    };
+
+    let current = makeContentPage(true);
     output.push(current.paper);
 
     const nextPage = () => {
-      current = makePaper(chapter, false, pageNumber++);
+      current = makeContentPage(false);
       output.push(current.paper);
     };
 
     chapter.subsections.forEach((subsection, subsectionIndex) => {
       if (subsection.pageBreakBefore && current.used > 0) nextPage();
       const startsContinued = subsection.startsContinued === true;
-      let complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued);
+      let complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued, current.measurementFrameClass);
       const nextSubsection = chapter.subsections[subsectionIndex + 1];
       if (subsection.anchorsNextHeading && nextSubsection && current.used > 0) {
         const nextPreviewBlocks = nextSubsection.blocks.length ? [nextSubsection.blocks[0]] : [];
-        const nextPreviewHeight = measure(makeSubsection(nextSubsection, nextPreviewBlocks, false));
+        const nextPreviewHeight = measure(makeSubsection(nextSubsection, nextPreviewBlocks, false), current.measurementFrameClass);
         if (complete.height + nextPreviewHeight > maxHeight - current.used) {
           nextPage();
-          complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued);
+          complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued, current.measurementFrameClass);
         }
       }
       const available = maxHeight - current.used;
@@ -987,7 +996,7 @@ function paginate() {
         return;
       }
 
-      let remaining = fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings);
+      let remaining = fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings, current.measurementFrameClass);
       let continued = startsContinued;
 
       while (remaining.length) {
@@ -995,7 +1004,7 @@ function paginate() {
           current.used > 0
           && (
             remaining[0].pageBreakBefore
-            || renderMeasuredSubsection(subsection, [remaining[0]], continued).height > maxHeight - current.used
+            || renderMeasuredSubsection(subsection, [remaining[0]], continued, current.measurementFrameClass).height > maxHeight - current.used
           )
         ) {
           nextPage();
@@ -1005,7 +1014,7 @@ function paginate() {
         let selectedHeight = 0;
         for (const block of remaining) {
           if (selected.length && block.pageBreakBefore) break;
-          const candidate = renderMeasuredSubsection(subsection, [...selected, block], continued);
+          const candidate = renderMeasuredSubsection(subsection, [...selected, block], continued, current.measurementFrameClass);
           if (candidate.height <= maxHeight - current.used || selected.length === 0) {
             selected.push(block);
             selectedHeight = candidate.height;
@@ -1018,13 +1027,13 @@ function paginate() {
         const leavesOneLineLeadIn = current.used > 0
           && remaining.length > selected.length
           && selectedBlocks.length === 1
-          && !hasMinimumStartCopy(subsection, selectedBlocks[0]);
+          && !hasMinimumStartCopy(subsection, selectedBlocks[0], current.measurementFrameClass);
         if (leavesOneLineLeadIn) {
           nextPage();
           continue;
         }
 
-        const fragment = renderMeasuredSubsection(subsection, selected, continued).node;
+        const fragment = renderMeasuredSubsection(subsection, selected, continued, current.measurementFrameClass).node;
         fragment.classList.toggle("continues-next-page", remaining.length > selected.length);
         current.content.append(fragment);
         current.used += selectedHeight;

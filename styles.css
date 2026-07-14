@@ -1531,7 +1531,7 @@ textarea:focus {
   letter-spacing: 0.01px;
 }
 
-.letter-121 .subsection:not(:last-child) {
+.letter-121 .subsection:not(.is-chapter-last) {
   padding-bottom: 18px;
 }
 
