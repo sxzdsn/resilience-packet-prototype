@@ -344,7 +344,7 @@
 .map-chapter-subtitle {
   width: 100%;
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: -0.29px;
   line-height: normal;
@@ -382,14 +382,14 @@
 }
 
 .map-subsection-content {
-  border-left: 1px solid rgba(0,0,0,.3);
+  border-left: 2px solid rgba(0,0,0,.3);
   padding-left: 10px;
 }
 
 .map-subsection-heading {
   display: block;
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   letter-spacing: -0.29025px;
 }
 

@@ -3,13 +3,13 @@
 A local, dependency-free browser prototype containing the complete 25-page Figma packet and demonstrating:
 
 - exact US Letter page geometry based on the Figma packet;
+- single-page and cover-skipping two-page preview modes;
 - a permanently reserved chapter-title band;
-- a Google Docs URL handoff control backed by a local semantic content snapshot;
-- automatic keep-together behavior for short subsections;
-- semantic splitting of long subsections;
+- a Google Docs URL importer that fetches a link-shared document and maps its semantic structure into the packet;
+- semantic page filling that allows subsections to split between sentences, safe clause breaks, list items, and table rows, while keeping at least two lines of paragraph copy with a heading;
 - repeated subsection headings with generated `CONTINUED` badges;
 - chapter-aware footers and print-to-PDF output;
-- dedicated cover, orientation-card, introductory-letter, and contents templates;
+- dedicated cover, orientation-card, introductory-letter, and contents templates selected by red bracketed Google Docs directives;
 - the full Caregiver, About Resilience, Navigating Emotions, Hospital Visit, Legal Process, At School and Work, and Minors Rights chapters;
 - legal Q&A cards, emotion exercises, visual grids, process rows, contact strips, comparison cards, and left-rule callouts.
 
@@ -19,14 +19,16 @@ Figma SVGs are bundled under `assets/icons/` for the website, phone, email, cont
 
 The rendered packet follows the exact numbered Figma frame order, `01` through `25`. The reordered run now keeps About Resilience and Navigating Emotions together, and includes the added Orders of Protection, survivor-based immigration, and continued employment pages. The corrected Hospital Visit continuation repeats “The hospital is required to offer you” with a `CONTINUED` badge.
 
-Pasted markup is reduced to supported semantic formatting, and PDF export is blocked if an unsplittable block is taller than a page. Print colors are forced to exact mode where the browser supports it.
+Imported markup is reduced to supported semantic formatting, and PDF export is blocked if an unsplittable block is taller than a page. Print colors are forced to exact mode where the browser supports it.
 
 Run locally:
 
 ```sh
-python3 -m http.server 8765
+python3 server.py 8765
 ```
 
-Then open `http://localhost:8765/outputs/resilience-packet-prototype/`.
+Then open `http://localhost:8765/`.
 
-This is still a prototype: the Google Docs URL is retained as the editorial source link while the browser renders the bundled semantic snapshot. Live document fetching would require an authenticated Docs API or a same-origin server endpoint. Blank gray visual-grid cells remain placeholders for final imagery.
+The local server provides a same-origin proxy for Google Docs' HTML export. Documents must be shared so anyone with the link can view them; private documents would require an authenticated Google API integration. Heading 1 becomes a chapter, Heading 2 a section, Heading 3 a nested section, and paragraphs, lists, links, inline emphasis, tables, and embedded images are preserved. Google Docs tables become the packet card grid shown in the style guide. Red `[Cover]`, `[Summary Graphic]`, and `[Letter]` lines select the three special templates and remain hidden in the output; fully italicized paragraphs within `[Letter]` are converted into its lower, smaller supporting-notes section without retaining italics. Special-page content is separated automatically, and other red editorial text is omitted.
+
+The dependency-free runtime is split by responsibility: `google-doc-import.js` adapts exported Google Docs HTML, `app.js` builds and paginates the semantic model, `figma-comparison.js` owns comparison-only frame decoration, and `packet-content.js` supplies the bundled Figma-aligned fallback content.

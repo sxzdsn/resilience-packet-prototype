@@ -1,3 +1,6 @@
+import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260713-15";
+import { makePageComparisons } from "./figma-comparison.js?v=20260713-01";
+
 const sampleSource = window.RESILIENCE_PACKET_SOURCE;
 
 const els = {
@@ -6,23 +9,14 @@ const els = {
   settingsToggle: document.querySelector("#toggleSettings"),
   figmaToggle: document.querySelector("#toggleFigma"),
   preview: document.querySelector(".preview-panel"),
-  title: document.querySelector("#packetTitle"),
-  subtitle: document.querySelector("#packetSubtitle"),
-  website: document.querySelector("#packetWebsite"),
-  year: document.querySelector("#packetYear"),
-  summaryTitle: document.querySelector("#summaryTitle"),
-  summaryRights: document.querySelector("#summaryRights"),
-  summaryEmotions: document.querySelector("#summaryEmotions"),
-  summaryEmotionsDetail: document.querySelector("#summaryEmotionsDetail"),
-  summaryConfidentiality: document.querySelector("#summaryConfidentiality"),
-  summaryBilling: document.querySelector("#summaryBilling"),
-  summaryBillingDetail: document.querySelector("#summaryBillingDetail"),
-  summaryOrganization: document.querySelector("#summaryOrganization"),
-  summaryFootnote: document.querySelector("#summaryFootnote"),
+  spreadToggle: document.querySelector("#toggleSpread"),
   docsUrl: document.querySelector("#docsUrl"),
   docsLink: document.querySelector("#openDocsLink"),
+  docsLinkPreview: document.querySelector("#docsLinkPreview"),
+  docsPreviewFrame: document.querySelector("#docsPreviewFrame"),
   source: document.querySelector("#docsSource"),
   importButton: document.querySelector("#importButton"),
+  refreshButton: document.querySelector("#refreshButton"),
   importSummary: document.querySelector("#importSummary"),
   pages: document.querySelector("#pages"),
   warnings: document.querySelector("#renderWarnings"),
@@ -34,7 +28,6 @@ const els = {
 };
 
 let documentModel = { chapters: [] };
-let renderTimer;
 let previewCenterFrame;
 
 function centerPreviewPages() {
@@ -44,6 +37,9 @@ function centerPreviewPages() {
     els.preview.scrollLeft = Math.max(0, maxScrollLeft / 2);
   });
 }
+let isLiveDocument = false;
+let importedSpecialPages = [];
+let singlePageZoom = 90;
 
 function slugify(value) {
   return value
@@ -53,13 +49,40 @@ function slugify(value) {
     .replace(/(^-|-$)/g, "");
 }
 
+function googleDocsPreviewUrl(value) {
+  const docsUrl = normalizeGoogleDocsUrl(value);
+  if (!docsUrl) return "";
+  const url = new URL(docsUrl);
+  url.pathname = url.pathname.replace(/\/edit$/, "/preview");
+  return url.toString();
+}
+
+function syncDocsPreview(value = els.docsUrl.value) {
+  const previewUrl = googleDocsPreviewUrl(value);
+  els.docsLinkPreview.hidden = !previewUrl;
+  if (previewUrl && els.docsPreviewFrame.src !== previewUrl) els.docsPreviewFrame.src = previewUrl;
+  if (!previewUrl) els.docsPreviewFrame.removeAttribute("src");
+}
+
+function safeImageSource(value) {
+  return /^(?:https:\/\/|data:image\/(?:png|jpe?g|gif|webp);base64,)/i.test(value || "");
+}
+
 function cleanHtml(node) {
   const clone = node.cloneNode(true);
-  const allowedTags = new Set(["A", "B", "BR", "EM", "I", "LI", "OL", "P", "SPAN", "STRONG", "U", "UL"]);
+  const allowedTags = new Set(["A", "B", "BR", "EM", "I", "IMG", "LI", "OL", "P", "SPAN", "STRONG", "U", "UL"]);
   clone.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((child) => child.remove());
   [...clone.querySelectorAll("*")].forEach((child) => {
     if (!allowedTags.has(child.tagName)) {
       child.replaceWith(...child.childNodes);
+      return;
+    }
+
+    if (child.tagName === "IMG") {
+      [...child.attributes].forEach((attribute) => {
+        if (!["alt", "height", "src", "width"].includes(attribute.name.toLowerCase())) child.removeAttribute(attribute.name);
+      });
+      if (!safeImageSource(child.getAttribute("src"))) child.remove();
       return;
     }
 
@@ -81,6 +104,7 @@ function parseSource() {
   const chapters = [];
   let chapter = null;
   let subsection = null;
+  let activeParentId = null;
 
   const ensureChapter = () => {
     if (!chapter) {
@@ -94,9 +118,9 @@ function parseSource() {
     ensureChapter();
     if (!subsection) {
       subsection = {
-        id: `${chapter.id}-introduction`,
-        title: "Introduction",
-        policy: "auto",
+        id: `${chapter.id}-body`,
+        title: "",
+        isUntitled: true,
         blocks: [],
       };
       chapter.subsections.push(subsection);
@@ -114,6 +138,7 @@ function parseSource() {
       chapter = { id, title: text, footerLabel: text, dek: "", subsections: [] };
       chapters.push(chapter);
       subsection = null;
+      activeParentId = null;
       return;
     }
 
@@ -125,13 +150,16 @@ function parseSource() {
         level: Number(tag.slice(1)),
         title: text,
         titleHtml: cleanHtml(node),
-        policy: node.dataset.policy || "auto",
+        depth: tag === "h3" ? 3 : 2,
+        parentId: tag === "h3" ? activeParentId : null,
+        blankLinesBefore: Number(node.dataset.blankLinesBefore) || 0,
         pageBreakBefore: node.dataset.pageBreakBefore === "true",
         startsContinued: node.dataset.startContinued === "true",
         continuationStyle: ["header", "none"].includes(node.dataset.repeat) ? node.dataset.repeat : "badge",
         blocks: [],
       };
       chapter.subsections.push(subsection);
+      if (tag === "h2") activeParentId = id;
       return;
     }
 
@@ -141,10 +169,12 @@ function parseSource() {
     }
 
     const target = ensureSubsection();
+    const blockStart = target.blocks.length;
     if (tag === "ul" || tag === "ol") {
       target.blocks.push({
         type: "list",
         ordered: tag === "ol",
+        start: tag === "ol" ? Number(node.getAttribute("start")) || 1 : undefined,
         items: [...node.querySelectorAll(":scope > li")].map((li) => cleanHtml(li)),
       });
     } else if (tag === "table") {
@@ -171,6 +201,18 @@ function parseSource() {
         label: node.querySelector("figcaption")?.textContent.trim() || "",
         count: Number(node.dataset.count) || 6,
       });
+    } else if (tag === "figure" && node.dataset.blockType === "doc-image") {
+      const image = node.querySelector("img");
+      if (image && safeImageSource(image.getAttribute("src"))) {
+        target.blocks.push({
+          type: "image",
+          src: image.getAttribute("src"),
+          alt: image.getAttribute("alt") || "",
+          caption: node.querySelector("figcaption")?.textContent.trim() || "",
+          width: Number(node.dataset.width) || 0,
+          height: Number(node.dataset.height) || 0,
+        });
+      }
     } else if (node.dataset.blockType === "contact-row") {
       target.blocks.push({
         type: "contact-row",
@@ -213,6 +255,7 @@ function parseSource() {
       target.blocks.push({
         type: "card-grid",
         layout: node.dataset.layout || "columns",
+        importedTable: node.dataset.importedTable === "true",
         cards: [...node.querySelectorAll(":scope > article")].map((item) => cleanHtml(item)),
       });
     } else if (node.dataset.blockType === "section-divider") {
@@ -222,10 +265,23 @@ function parseSource() {
     } else {
       target.blocks.push({ type: "paragraph", html: cleanHtml(node) || text });
     }
+    if (target.blocks.length > blockStart && node.dataset.blankLinesBefore) {
+      target.blocks[blockStart].blankLinesBefore = Number(node.dataset.blankLinesBefore) || 0;
+    }
+    if (target.blocks.length > blockStart && node.dataset.pageBreakBefore === "true") {
+      target.blocks[blockStart].pageBreakBefore = true;
+    }
   });
 
   chapters.forEach((item) => {
-    item.subsections = item.subsections.filter((section) => section.blocks.length > 0);
+    item.subsections.forEach((section, index) => {
+      const next = item.subsections[index + 1];
+      section.anchorsNextHeading = section.depth === 2
+        && section.blocks.length === 0
+        && next?.depth === 3
+        && next.parentId === section.id;
+    });
+    item.subsections = item.subsections.filter((section) => section.blocks.length > 0 || section.anchorsNextHeading);
   });
 
   const arranged = chapters.filter((item) => item.subsections.length > 0);
@@ -279,6 +335,23 @@ function makeBlock(block) {
     return figure;
   }
 
+  if (block.type === "image") {
+    const figure = document.createElement("figure");
+    figure.className = "content-block content-image";
+    const image = document.createElement("img");
+    image.src = safeImageSource(block.src) ? block.src : "";
+    image.alt = block.alt || "";
+    if (block.width > 0) image.width = block.width;
+    if (block.height > 0) image.height = block.height;
+    figure.append(image);
+    if (block.caption) {
+      const caption = document.createElement("figcaption");
+      caption.textContent = block.caption;
+      figure.append(caption);
+    }
+    return figure;
+  }
+
   if (block.type === "contact-row") {
     const row = document.createElement("div");
     row.className = "content-block contact-row";
@@ -314,6 +387,7 @@ function makeBlock(block) {
   if (block.type === "card-grid") {
     const grid = document.createElement("div");
     grid.className = `content-block card-grid card-grid-${block.layout || "columns"}`;
+    grid.classList.toggle("card-grid-imported", block.importedTable === true);
     block.cards.forEach((card) => {
       const article = document.createElement("article");
       article.innerHTML = card;
@@ -385,6 +459,7 @@ function makeBlock(block) {
   if (block.type === "list") {
     const list = document.createElement(block.ordered ? "ol" : "ul");
     list.className = "content-block content-list";
+    if (block.ordered && block.start > 1) list.start = block.start;
     block.items.forEach((item) => {
       const li = document.createElement("li");
       li.innerHTML = item;
@@ -407,29 +482,68 @@ function makeBlock(block) {
   return element;
 }
 
-function makeSubsection(subsection, blocks, continued = false) {
-  const wrapper = document.createElement("section");
-  wrapper.className = "subsection";
-  wrapper.classList.add(`subsection-level-${subsection.level || 2}`);
-  wrapper.classList.toggle("is-chapter-last", subsection.isChapterLast === true);
-  wrapper.dataset.subsection = subsection.id;
+function mergeBlockFragments(blocks) {
+  return blocks.reduce((merged, block) => {
+    const previous = merged.at(-1);
+    if (block.type === "list" && block.listGroup && previous?.listGroup === block.listGroup) {
+      previous.items.push(...block.items);
+      return merged;
+    }
+    if (block.type === "paragraph" && block.paragraphGroup && previous?.paragraphGroup === block.paragraphGroup) {
+      previous.html = `${previous.html} ${block.html}`;
+      return merged;
+    }
+    if (block.type === "table" && block.tableGroup && previous?.tableGroup === block.tableGroup) {
+      previous.rows.push(...block.rows.slice(block.tableHasHeader ? 1 : 0));
+      return merged;
+    }
+    if (block.type === "list") merged.push({ ...block, items: [...block.items] });
+    else if (block.type === "table") merged.push({ ...block, rows: [...block.rows] });
+    else merged.push({ ...block });
+    return merged;
+  }, []);
+}
 
+function makeSubsectionHeadingRow(section, continued = false) {
   const headingRow = document.createElement("div");
   headingRow.className = "subsection-heading-row";
   const heading = document.createElement("h3");
   heading.className = "subsection-heading";
-  heading.innerHTML = subsection.titleHtml || escapeHtml(subsection.title);
-  headingRow.append(heading);
+  heading.innerHTML = section.titleHtml || escapeHtml(section.title);
 
-  if (continued && subsection.continuationStyle !== "header") {
+  if (continued && section.continuationStyle !== "header") {
     const badge = document.createElement("span");
     badge.className = "continued-badge";
     badge.innerHTML = '<img src="assets/icons/continued.svg" alt="Continued">';
-    headingRow.append(badge);
+    heading.append(document.createTextNode("\u00a0"), badge);
   }
 
-  if (!(continued && subsection.continuationStyle === "none")) wrapper.append(headingRow);
-  wrapper.append(...blocks.map(makeBlock));
+  headingRow.append(heading);
+  return headingRow;
+}
+
+function makeSubsection(subsection, blocks, continued = false) {
+  const wrapper = document.createElement("section");
+  wrapper.className = "subsection";
+  wrapper.classList.toggle("is-nested", subsection.depth === 3);
+  wrapper.classList.toggle("is-continuation", continued);
+  wrapper.classList.toggle("is-chapter-last", subsection.isChapterLast === true);
+  wrapper.classList.toggle("has-doc-blank-before", !continued && subsection.blankLinesBefore > 0);
+  if (!continued && subsection.blankLinesBefore > 0) {
+    wrapper.style.setProperty("--doc-blank-lines", subsection.blankLinesBefore);
+  }
+  wrapper.dataset.subsection = subsection.id;
+
+  const headingRow = subsection.isUntitled ? null : makeSubsectionHeadingRow(subsection, continued);
+  const blocksToRender = mergeBlockFragments(blocks).map((block) => {
+    const node = makeBlock(block);
+    node.classList.toggle("has-doc-blank-before", block.blankLinesBefore > 0);
+    if (block.blankLinesBefore > 0) node.style.setProperty("--doc-blank-lines", block.blankLinesBefore);
+    return node;
+  });
+
+  if (headingRow && !(continued && subsection.continuationStyle === "none")) wrapper.append(headingRow);
+  wrapper.append(...blocksToRender);
   return wrapper;
 }
 
@@ -439,6 +553,42 @@ function measure(node) {
   container.append(node);
   els.measurement.replaceChildren(container);
   return container.getBoundingClientRect().height;
+}
+
+function renderMeasuredSubsection(subsection, blocks, continued = false) {
+  const node = makeSubsection(subsection, blocks, continued);
+  return {
+    node,
+    height: measure(node.cloneNode(true)),
+  };
+}
+
+function hasMinimumStartCopy(subsection, block) {
+  if (block.type !== "paragraph") return true;
+
+  const subsectionNode = makeSubsection(subsection, [block]);
+  const container = document.createElement("div");
+  container.className = "measurement-content";
+  container.append(subsectionNode);
+  els.measurement.replaceChildren(container);
+
+  const paragraph = subsectionNode.querySelector(".content-block");
+  const range = document.createRange();
+  range.selectNodeContents(paragraph);
+  const lineTops = new Set(
+    [...range.getClientRects()]
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => Math.round(rect.top * 2) / 2),
+  );
+  if (lineTops.size) return lineTops.size >= 2;
+
+  const styles = getComputedStyle(paragraph);
+  const explicitLineHeight = Number.parseFloat(styles.lineHeight);
+  const fontSize = Number.parseFloat(styles.fontSize);
+  const lineHeight = Number.isFinite(explicitLineHeight)
+    ? explicitLineHeight
+    : fontSize * 1.35;
+  return paragraph.getBoundingClientRect().height >= (lineHeight * 2) - 0.5;
 }
 
 function escapeHtml(value) {
@@ -456,67 +606,124 @@ function plainText(html) {
   return container.textContent.trim();
 }
 
-function splitParagraphToFit(subsection, block, maxHeight) {
-  const text = plainText(block.html);
-  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) || [text];
-  if (sentences.length < 2) return null;
+function splitAtSafeClauseBoundaries(subsection, sentence) {
+  const clauses = [];
+  let start = 0;
 
-  const chunks = [];
-  let current = "";
-  sentences.forEach((sentence) => {
-    const candidate = current ? `${current} ${sentence}` : sentence;
-    const candidateBlock = { type: "paragraph", html: escapeHtml(candidate) };
-    const candidateHeight = measure(makeSubsection(subsection, [candidateBlock], false));
-    if (candidateHeight <= maxHeight || !current) {
-      current = candidate;
-    } else {
-      chunks.push({ type: "paragraph", html: escapeHtml(current) });
-      current = sentence;
-    }
-  });
-  if (current) chunks.push({ type: "paragraph", html: escapeHtml(current) });
-  return chunks.length > 1 ? chunks : null;
+  for (const boundary of sentence.matchAll(/;|:(?=\s)|—/g)) {
+    const end = boundary.index + boundary[0].length;
+    const clause = sentence.slice(start, end);
+    if (clause.trim()) clauses.push(clause);
+    start = end;
+  }
+
+  const tail = sentence.slice(start);
+  if (tail.trim()) clauses.push(tail);
+  if (clauses.length < 2) return [sentence];
+
+  const everyClauseHasTwoLines = clauses.every((clause) => hasMinimumStartCopy(subsection, {
+    type: "paragraph",
+    html: escapeHtml(clause),
+  }));
+  return everyClauseHasTwoLines ? clauses : [sentence];
 }
 
-function normalizeOversizedBlocks(subsection, maxHeight, warnings, fatalWarnings) {
-  const normalized = [];
-  subsection.blocks.forEach((block) => {
-    const height = measure(makeSubsection(subsection, [block], false));
-    if (height <= maxHeight) {
-      normalized.push(block);
-      return;
-    }
+function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings) {
+  const text = plainText(block.html);
+  const segmenter = typeof Intl?.Segmenter === "function"
+    ? new Intl.Segmenter(undefined, { granularity: "sentence" })
+    : null;
+  const sentences = segmenter
+    ? [...segmenter.segment(text)].map(({ segment }) => segment).filter((segment) => segment.trim())
+    : text.match(/[^.!?]+[.!?]+\s*|[^.!?]+$/g)?.filter((segment) => segment.trim()) || [text];
+  const fragments = sentences.flatMap((sentence) => splitAtSafeClauseBoundaries(subsection, sentence));
 
+  if (fragments.length < 2) return [block];
+
+  const paragraphGroup = `${subsection.id}-paragraph-${blockIndex}`;
+  return fragments.map((fragment, fragmentIndex) => {
+    const fragmentBlock = {
+      ...block,
+      html: escapeHtml(fragment),
+      paragraphGroup,
+      blankLinesBefore: fragmentIndex === 0 ? block.blankLinesBefore : 0,
+      pageBreakBefore: fragmentIndex === 0 ? block.pageBreakBefore : false,
+    };
+    const fragmentHeight = renderMeasuredSubsection(subsection, [fragmentBlock]).height;
+    if (fragmentHeight > maxHeight) {
+      const message = `A single sentence or clause in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
+      warnings.push(message);
+      fatalWarnings.push(message);
+    }
+    return fragmentBlock;
+  });
+}
+
+function fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings) {
+  const fragments = [];
+  subsection.blocks.forEach((block, blockIndex) => {
     if (block.type === "list" && block.items.length > 1) {
-      block.items.forEach((item) => normalized.push({ ...block, items: [item] }));
-      warnings.push(`An oversized list in “${subsection.title}” was split between list items.`);
-      return;
-    }
-
-    if (block.type === "table" && block.rows.length > 2) {
-      const header = block.rows[0].some((cell) => cell.header) ? block.rows[0] : null;
-      block.rows.slice(header ? 1 : 0).forEach((row) => {
-        normalized.push({ type: "table", rows: header ? [header, row] : [row] });
+      const listGroup = `${subsection.id}-list-${blockIndex}`;
+      block.items.forEach((item, itemIndex) => {
+        const itemBlock = {
+          ...block,
+          items: [item],
+          start: (block.start || 1) + itemIndex,
+          listGroup,
+          blankLinesBefore: itemIndex === 0 ? block.blankLinesBefore : 0,
+          pageBreakBefore: itemIndex === 0 ? block.pageBreakBefore : false,
+        };
+        const itemHeight = renderMeasuredSubsection(subsection, [itemBlock]).height;
+        if (itemHeight > maxHeight) {
+          const message = `A single list item in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
+          warnings.push(message);
+          fatalWarnings.push(message);
+        }
+        fragments.push(itemBlock);
       });
-      warnings.push(`An oversized table in “${subsection.title}” was split between rows.`);
       return;
     }
 
     if (block.type === "paragraph") {
-      const chunks = splitParagraphToFit(subsection, block, maxHeight);
-      if (chunks) {
-        normalized.push(...chunks);
-        warnings.push(`An oversized paragraph in “${subsection.title}” was split at sentence boundaries.`);
+      fragments.push(...fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings));
+      return;
+    }
+
+    if (block.type === "table") {
+      const header = block.rows[0].some((cell) => cell.header) ? block.rows[0] : null;
+      const bodyRows = block.rows.slice(header ? 1 : 0);
+      if (bodyRows.length > 1) {
+        const tableGroup = `${subsection.id}-table-${blockIndex}`;
+        bodyRows.forEach((row, rowIndex) => {
+          const rowBlock = {
+            ...block,
+            rows: header ? [header, row] : [row],
+            tableGroup,
+            tableHasHeader: Boolean(header),
+            blankLinesBefore: rowIndex === 0 ? block.blankLinesBefore : 0,
+            pageBreakBefore: rowIndex === 0 ? block.pageBreakBefore : false,
+          };
+          const rowHeight = renderMeasuredSubsection(subsection, [rowBlock]).height;
+          if (rowHeight > maxHeight) {
+            const message = `A single table row in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
+            warnings.push(message);
+            fatalWarnings.push(message);
+          }
+          fragments.push(rowBlock);
+        });
         return;
       }
     }
 
-    normalized.push(block);
-    const message = `A single ${block.type} in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
-    warnings.push(message);
-    fatalWarnings.push(message);
+    const height = renderMeasuredSubsection(subsection, [block]).height;
+    fragments.push(block);
+    if (height > maxHeight) {
+      const message = `A single ${block.type} in “${subsection.title}” is taller than a page and needs an editorial edit before export.`;
+      warnings.push(message);
+      fatalWarnings.push(message);
+    }
   });
-  return normalized;
+  return fragments;
 }
 
 function contentHeightPx() {
@@ -564,9 +771,17 @@ function makeFooter(label, pageNumber) {
   return footer;
 }
 
-function makeCover() {
+function makeCover(data = {}) {
+  const cover = {
+    title: "",
+    subtitle: "",
+    website: "",
+    year: "",
+    ...data,
+  };
   const paper = document.createElement("article");
   paper.className = "paper cover-page";
+  paper.dataset.pageStyle = "cover";
   paper.setAttribute("aria-label", "Packet cover");
   paper.innerHTML = `
     <p class="cover-brand">RESILIENCE</p>
@@ -575,24 +790,25 @@ function makeCover() {
     <p class="cover-meta cover-site"></p>
     <p class="cover-meta cover-year"></p>
   `;
-  paper.querySelector(".cover-title").textContent = els.title.value;
-  paper.querySelector(".cover-subtitle").textContent = els.subtitle.value;
-  paper.querySelector(".cover-site").textContent = els.website.value;
-  paper.querySelector(".cover-year").textContent = els.year.value;
+  paper.querySelector(".cover-title").textContent = cover.title;
+  paper.querySelector(".cover-subtitle").textContent = cover.subtitle;
+  paper.querySelector(".cover-site").textContent = cover.website;
+  paper.querySelector(".cover-year").textContent = cover.year;
   return paper;
 }
 
-function makeOrientationPage(data) {
+function makeOrientationPage(data = {}) {
   const summary = {
-    title: els.summaryTitle.value,
-    rights: els.summaryRights.value,
-    emotions: els.summaryEmotions.value,
-    emotionsDetail: els.summaryEmotionsDetail.value,
-    confidentiality: els.summaryConfidentiality.value,
-    billing: els.summaryBilling.value,
-    billingDetail: els.summaryBillingDetail.value,
-    organization: els.summaryOrganization.value,
-    footnote: els.summaryFootnote.value,
+    title: "",
+    rights: "",
+    emotions: "",
+    emotionsDetail: "",
+    confidentiality: "",
+    billing: "",
+    billingDetail: "",
+    organization: "",
+    footnote: "",
+    ...data,
   };
   const splitSupportingCopy = (value) => {
     const match = value.trim().match(/^(.+?[.!?])\s+(.+)$/);
@@ -602,6 +818,7 @@ function makeOrientationPage(data) {
   const [organizationMessage, organizationDetail] = splitSupportingCopy(summary.organization);
   const paper = document.createElement("article");
   paper.className = "paper orientation-page";
+  paper.dataset.pageStyle = "summary-graphic";
   paper.setAttribute("aria-label", "Orientation and reassurance");
   paper.innerHTML = `
     <img class="orientation-banner" src="assets/icons/orientation-banner.svg" alt="">
@@ -647,33 +864,61 @@ function makeOrientationPage(data) {
   return paper;
 }
 
-function makeLetterPage(data) {
+function makeLetterPage(data = {}) {
+  const letter = {
+    salutation: "Hello,",
+    paragraphs: [],
+    signoff: "Sincerely,",
+    organization: "",
+    notes: [],
+    contacts: [],
+    hasDivider: false,
+    isImported: false,
+    ...data,
+  };
   const paper = document.createElement("article");
   paper.className = "paper letter-page";
+  paper.classList.toggle("is-imported-letter", letter.isImported);
+  paper.classList.toggle("has-divider", letter.hasDivider);
+  paper.dataset.pageStyle = "letter";
   paper.setAttribute("aria-label", "Introductory letter");
   const salutation = document.createElement("h2");
   salutation.className = "letter-salutation";
-  salutation.textContent = data.salutation;
+  salutation.textContent = letter.salutation;
   const main = document.createElement("div");
   main.className = "letter-main";
-  data.paragraphs.forEach((text) => {
+  letter.paragraphs.forEach((text) => {
     const p = document.createElement("p");
     p.textContent = text;
     main.append(p);
   });
   const signoff = document.createElement("p");
   signoff.className = "letter-signoff";
-  signoff.innerHTML = `${data.signoff}<br><strong>${data.organization}</strong>`;
+  signoff.innerHTML = `${escapeHtml(letter.signoff)}<br><strong>${escapeHtml(letter.organization)}</strong>`;
   const notes = document.createElement("div");
   notes.className = "letter-notes";
-  data.notes.forEach((text) => {
+  letter.notes.forEach((text) => {
     const p = document.createElement("p");
     p.textContent = text;
     notes.append(p);
   });
-  notes.append(makeBlock({ type: "contact-row", items: data.contacts }));
-  paper.append(salutation, main, signoff, notes);
+  if (letter.contacts.length) notes.append(makeBlock({ type: "contact-row", items: letter.contacts }));
+  if (letter.isImported) {
+    const body = document.createElement("div");
+    body.className = "imported-letter-body";
+    body.append(main, signoff);
+    paper.append(salutation, body);
+  } else {
+    paper.append(salutation, main, signoff);
+  }
+  if (letter.notes.length || letter.contacts.length) paper.append(notes);
   return paper;
+}
+
+function makeSpecialPage(page) {
+  if (page.type === "cover") return makeCover(page.data);
+  if (page.type === "summary-graphic") return makeOrientationPage(page.data);
+  return makeLetterPage(page.data);
 }
 
 function makeContentsPage(data, pageNumber) {
@@ -699,12 +944,17 @@ function paginate() {
   const warnings = [];
   const fatalWarnings = [];
   const preface = window.RESILIENCE_PREFACE || {};
-  const output = [makeCover()];
-  if (preface.orientation) output.push(makeOrientationPage(preface.orientation));
-  if (preface.letter) output.push(makeLetterPage(preface.letter));
-  if (preface.contents) output.push(makeContentsPage(preface.contents, 3));
+  const showBundledContents = !isLiveDocument && Boolean(preface.contents);
+  const output = isLiveDocument
+    ? importedSpecialPages.map(makeSpecialPage)
+    : [
+        preface.cover ? makeCover(preface.cover) : null,
+        preface.orientation ? makeOrientationPage(preface.orientation) : null,
+        preface.letter ? makeLetterPage(preface.letter) : null,
+      ].filter(Boolean);
+  if (showBundledContents) output.push(makeContentsPage(preface.contents, 3));
   const maxHeight = contentHeightPx();
-  let pageNumber = preface.contents ? 4 : 1;
+  let pageNumber = showBundledContents ? 4 : 3;
 
   documentModel.chapters.forEach((chapter) => {
     let current = makePaper(chapter, true, pageNumber++);
@@ -715,52 +965,66 @@ function paginate() {
       output.push(current.paper);
     };
 
-    chapter.subsections.forEach((subsection) => {
+    chapter.subsections.forEach((subsection, subsectionIndex) => {
       if (subsection.pageBreakBefore && current.used > 0) nextPage();
       const startsContinued = subsection.startsContinued === true;
-      const allNode = makeSubsection(subsection, subsection.blocks, startsContinued);
-      const allHeight = measure(allNode.cloneNode(true));
+      let complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued);
+      const nextSubsection = chapter.subsections[subsectionIndex + 1];
+      if (subsection.anchorsNextHeading && nextSubsection && current.used > 0) {
+        const nextPreviewBlocks = nextSubsection.blocks.length ? [nextSubsection.blocks[0]] : [];
+        const nextPreviewHeight = measure(makeSubsection(nextSubsection, nextPreviewBlocks, false));
+        if (complete.height + nextPreviewHeight > maxHeight - current.used) {
+          nextPage();
+          complete = renderMeasuredSubsection(subsection, subsection.blocks, startsContinued);
+        }
+      }
       const available = maxHeight - current.used;
 
-      if (allHeight <= available) {
-        current.content.append(allNode);
-        current.used += allHeight;
+      const hasForcedBlockBreak = subsection.blocks.some((block) => block.pageBreakBefore);
+      if (!hasForcedBlockBreak && complete.height <= available) {
+        current.content.append(complete.node);
+        current.used += complete.height;
         return;
       }
 
-      if (allHeight <= maxHeight && subsection.policy !== "split") {
-        if (current.used > 0) nextPage();
-        current.content.append(allNode);
-        current.used = allHeight;
-        return;
-      }
-
-      if (subsection.policy === "keep" && allHeight > maxHeight) {
-        warnings.push(`“${subsection.title}” is taller than a full page, so the prototype split it despite Keep together.`);
-      }
-
-      let remaining = normalizeOversizedBlocks(subsection, maxHeight, warnings, fatalWarnings);
+      let remaining = fragmentSubsectionBlocks(subsection, maxHeight, warnings, fatalWarnings);
       let continued = startsContinued;
 
       while (remaining.length) {
-        const firstCandidate = makeSubsection(subsection, [remaining[0]], continued);
-        const firstHeight = measure(firstCandidate.cloneNode(true));
-        if (firstHeight > maxHeight - current.used && current.used > 0) nextPage();
+        if (
+          current.used > 0
+          && (
+            remaining[0].pageBreakBefore
+            || renderMeasuredSubsection(subsection, [remaining[0]], continued).height > maxHeight - current.used
+          )
+        ) {
+          nextPage();
+        }
 
         const selected = [];
         let selectedHeight = 0;
         for (const block of remaining) {
-          const candidate = makeSubsection(subsection, [...selected, block], continued);
-          const candidateHeight = measure(candidate.cloneNode(true));
-          if (candidateHeight <= maxHeight - current.used || selected.length === 0) {
+          if (selected.length && block.pageBreakBefore) break;
+          const candidate = renderMeasuredSubsection(subsection, [...selected, block], continued);
+          if (candidate.height <= maxHeight - current.used || selected.length === 0) {
             selected.push(block);
-            selectedHeight = candidateHeight;
+            selectedHeight = candidate.height;
           } else {
             break;
           }
         }
 
-        const fragment = makeSubsection(subsection, selected, continued);
+        const selectedBlocks = mergeBlockFragments(selected);
+        const leavesOneLineLeadIn = current.used > 0
+          && remaining.length > selected.length
+          && selectedBlocks.length === 1
+          && !hasMinimumStartCopy(subsection, selectedBlocks[0]);
+        if (leavesOneLineLeadIn) {
+          nextPage();
+          continue;
+        }
+
+        const fragment = renderMeasuredSubsection(subsection, selected, continued).node;
         fragment.classList.toggle("continues-next-page", remaining.length > selected.length);
         current.content.append(fragment);
         current.used += selectedHeight;
@@ -774,73 +1038,7 @@ function paginate() {
     });
   });
 
-  const legacyFrameClass = {
-    1: 117,
-    2: 118,
-    3: 119,
-    4: 120,
-    5: 121,
-    6: 122,
-    7: 130,
-    8: 129,
-    9: 131,
-    10: 123,
-    11: 124,
-    12: 125,
-    13: 126,
-    14: 127,
-    15: 128,
-    16: 132,
-    20: 133,
-    22: 134,
-    23: 135,
-    24: 136,
-    25: 137,
-  };
-
-  output.forEach((paper, index) => {
-    const pageNumber = index + 1;
-    const pageLabel = String(pageNumber).padStart(2, "0");
-    paper.classList.add(`page-${pageLabel}`);
-    if (legacyFrameClass[pageNumber]) paper.classList.add(`letter-${legacyFrameClass[pageNumber]}`);
-    paper.dataset.figmaFrame = pageLabel;
-  });
-
-  const comparisons = output.map((paper) => {
-    const frameName = paper.dataset.figmaFrame;
-    const comparison = document.createElement("section");
-    comparison.className = "page-comparison";
-    comparison.setAttribute("aria-label", `${frameName} comparison`);
-
-    const referenceColumn = document.createElement("figure");
-    referenceColumn.className = "comparison-column figma-reference-column";
-    const referenceLabel = document.createElement("figcaption");
-    referenceLabel.className = "comparison-label";
-    referenceLabel.textContent = `Figma · ${frameName}`;
-    const referenceImage = document.createElement("img");
-    referenceImage.className = "figma-reference-page";
-    referenceImage.src = `assets/figma/page-${frameName}.png`;
-    referenceImage.alt = `Page ${frameName} from Figma`;
-    referenceImage.width = 612;
-    referenceImage.height = 792;
-    referenceColumn.append(referenceLabel, referenceImage);
-
-    const prototypeColumn = document.createElement("div");
-    prototypeColumn.className = "comparison-column prototype-column";
-    const prototypeLabel = document.createElement("p");
-    prototypeLabel.className = "comparison-label";
-    prototypeLabel.textContent = frameName === "01"
-      ? "Cover"
-      : frameName === "02"
-        ? "Summary Graphic"
-        : `Prototype · ${frameName}`;
-    prototypeColumn.append(prototypeLabel, paper);
-
-    comparison.append(referenceColumn, prototypeColumn);
-    return comparison;
-  });
-
-  els.pages.replaceChildren(...comparisons);
+  els.pages.replaceChildren(...makePageComparisons(output, isLiveDocument));
   centerPreviewPages();
   els.warnings.textContent = warnings.join(" ");
   els.warnings.classList.toggle("is-visible", warnings.length > 0);
@@ -852,7 +1050,23 @@ function paginate() {
     : "";
 }
 
-function importAndRender() {
+function setImportBusy(isBusy) {
+  els.importButton.disabled = isBusy;
+  els.refreshButton.disabled = isBusy;
+  els.importButton.textContent = isBusy ? "Importing…" : "Import & format";
+  els.refreshButton.textContent = isBusy ? "Refreshing…" : "Refresh";
+}
+
+async function responseError(response) {
+  try {
+    const payload = await response.json();
+    return payload.error || `Google Docs import failed (${response.status}).`;
+  } catch {
+    return `Google Docs import failed (${response.status}).`;
+  }
+}
+
+async function importAndRender() {
   const docsUrl = normalizeGoogleDocsUrl(els.docsUrl.value);
   if (!docsUrl) {
     els.docsUrl.setAttribute("aria-invalid", "true");
@@ -862,11 +1076,54 @@ function importAndRender() {
   els.docsUrl.removeAttribute("aria-invalid");
   els.docsUrl.value = docsUrl;
   els.docsLink.href = docsUrl;
-  documentModel = parseSource();
-  paginate();
-  const subsectionCount = documentModel.chapters.reduce((sum, chapter) => sum + chapter.subsections.length, 0);
-  const chapterCount = new Set(documentModel.chapters.map((chapter) => chapter.title)).size;
-  els.importSummary.textContent = `Linked document. ${chapterCount} chapters and ${subsectionCount} subsections are paginated from its local semantic snapshot.`;
+  syncDocsPreview(docsUrl);
+  setImportBusy(true);
+  els.importSummary.textContent = "Fetching and formatting the Google Doc…";
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(`/api/google-doc?url=${encodeURIComponent(docsUrl)}`, {
+      headers: { Accept: "text/html" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    const transformed = transformGoogleDocExport(await response.text(), { ignoreRedText: true });
+    els.source.replaceChildren(...filterImportedContent(transformed.nodes));
+    const nextModel = parseSource();
+    if (!nextModel.chapters.length) throw new Error("No chapter content remained after applying the import filters.");
+
+    documentModel = nextModel;
+    importedSpecialPages = transformed.specialPages;
+    isLiveDocument = true;
+    paginate();
+    const subsectionCount = documentModel.chapters.reduce((sum, chapter) => sum + chapter.subsections.length, 0);
+    const chapterCount = documentModel.chapters.length;
+    const notes = [];
+    if (transformed.specialPages.length) {
+      const labels = transformed.specialPages.map((page) => ({
+        cover: "Cover",
+        "summary-graphic": "Summary Graphic",
+        letter: "Letter",
+      })[page.type]);
+      notes.push(`Applied ${labels.join(", ")} page ${labels.length === 1 ? "style" : "styles"}.`);
+    }
+    if (!transformed.specialPages.some((page) => page.type === "summary-graphic")) {
+      notes.push("No [Summary Graphic] directive; skipped that page.");
+    }
+    if (transformed.ignoredRedNodes) notes.push(`Ignored ${transformed.ignoredRedNodes} red text ${transformed.ignoredRedNodes === 1 ? "run" : "runs"}.`);
+    if (transformed.pageBreakDirectives) notes.push(`Applied ${transformed.pageBreakDirectives} manual page ${transformed.pageBreakDirectives === 1 ? "break" : "breaks"}.`);
+    if (transformed.importedImages) notes.push(`Imported ${transformed.importedImages} embedded ${transformed.importedImages === 1 ? "image" : "images"}.`);
+    els.importSummary.textContent = `Imported ${chapterCount} chapters and ${subsectionCount} subsections from “${transformed.title}”. ${notes.join(" ")}`.trim();
+  } catch (error) {
+    const message = error.name === "AbortError"
+      ? "The document took too long to respond. Try again."
+      : error.message;
+    els.importSummary.textContent = `${message} The current preview was left unchanged.`;
+  } finally {
+    window.clearTimeout(timeout);
+    setImportBusy(false);
+  }
 }
 
 function normalizeGoogleDocsUrl(value) {
@@ -874,37 +1131,29 @@ function normalizeGoogleDocsUrl(value) {
     const url = new URL(value.trim());
     const match = url.pathname.match(/^\/document\/d\/([a-zA-Z0-9_-]+)/);
     if (url.hostname !== "docs.google.com" || !match) return "";
-    return `https://docs.google.com/document/d/${match[1]}/edit`;
+    const tab = url.searchParams.get("tab");
+    const normalized = `https://docs.google.com/document/d/${match[1]}/edit`;
+    return tab && /^[a-zA-Z0-9._-]+$/.test(tab) ? `${normalized}?tab=${encodeURIComponent(tab)}` : normalized;
   } catch {
     return "";
   }
 }
 
-function scheduleRender() {
-  window.clearTimeout(renderTimer);
-  renderTimer = window.setTimeout(paginate, 120);
+function setPreviewZoom(value) {
+  els.zoom.value = String(value);
+  document.documentElement.style.setProperty("--page-scale", value / 100);
+  els.zoomValue.textContent = `${value}%`;
 }
 
 els.importButton.addEventListener("click", importAndRender);
-[
-  els.title,
-  els.subtitle,
-  els.website,
-  els.year,
-  els.summaryTitle,
-  els.summaryRights,
-  els.summaryEmotions,
-  els.summaryEmotionsDetail,
-  els.summaryConfidentiality,
-  els.summaryBilling,
-  els.summaryBillingDetail,
-  els.summaryOrganization,
-  els.summaryFootnote,
-].forEach((input) => input.addEventListener("input", scheduleRender));
+els.refreshButton.addEventListener("click", importAndRender);
+els.docsUrl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") importAndRender();
+});
+els.docsUrl.addEventListener("input", () => syncDocsPreview());
 els.zoom.addEventListener("input", () => {
   const value = Number(els.zoom.value);
-  document.documentElement.style.setProperty("--page-scale", value / 100);
-  els.zoomValue.textContent = `${value}%`;
+  setPreviewZoom(value);
   centerPreviewPages();
 });
 els.settingsToggle.addEventListener("click", () => {
@@ -922,8 +1171,31 @@ els.figmaToggle.addEventListener("click", () => {
 els.shell.addEventListener("transitionend", (event) => {
   if (event.propertyName === "grid-template-columns") centerPreviewPages();
 });
+els.spreadToggle.addEventListener("click", () => {
+  const enabled = els.shell.classList.toggle("two-page-preview");
+  if (enabled) {
+    singlePageZoom = Number(els.zoom.value);
+    els.shell.classList.add("figma-hidden");
+    els.figmaToggle.setAttribute("aria-pressed", "true");
+    els.figmaToggle.textContent = "Show Figma";
+    setPreviewZoom(68);
+  } else {
+    setPreviewZoom(singlePageZoom);
+  }
+  els.spreadToggle.setAttribute("aria-pressed", String(enabled));
+  els.spreadToggle.textContent = enabled ? "Single-page view" : "Two-page view";
+  els.pages.setAttribute("aria-label", enabled ? "Two-page packet preview" : "Rendered packet pages");
+  centerPreviewPages();
+});
 els.printButton.addEventListener("click", () => window.print());
 
-els.source.innerHTML = sampleSource;
 els.docsLink.href = normalizeGoogleDocsUrl(els.docsUrl.value);
-document.fonts.ready.then(importAndRender);
+syncDocsPreview();
+document.fonts.ready.then(() => {
+  els.source.innerHTML = sampleSource;
+  documentModel = parseSource();
+  importedSpecialPages = [];
+  isLiveDocument = false;
+  paginate();
+  els.importSummary.textContent = "Paste a Google Docs link to replace the bundled reference packet.";
+});

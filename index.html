@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resilience Packet Publisher — Prototype</title>
-    <link rel="stylesheet" href="styles.css?v=20260713-12" />
+    <link rel="stylesheet" href="styles.css?v=20260713-24" />
   </head>
   <body>
     <main class="app-shell figma-hidden">
@@ -17,81 +17,11 @@
           <span class="status-dot" title="Changes render locally"></span>
         </header>
 
-        <details class="editor-section settings-section" aria-labelledby="cover-settings" open>
-          <summary><h2 id="cover-settings">Cover</h2></summary>
-          <div class="settings-section-content meta-grid">
-            <label>
-              Packet title
-              <input id="packetTitle" value="What you need to know" />
-            </label>
-            <label>
-              Subtitle
-              <input id="packetSubtitle" value="Information Packet" />
-            </label>
-            <label>
-              Website
-              <input id="packetWebsite" value="ourresilience.org" />
-            </label>
-            <label>
-              Year
-              <input id="packetYear" value="2026" inputmode="numeric" />
-            </label>
-          </div>
-        </details>
-
-        <details class="editor-section settings-section" aria-labelledby="summary-graphic-settings" open>
-          <summary><h2 id="summary-graphic-settings">Summary graphic</h2></summary>
-          <div class="settings-section-content summary-settings">
-            <p class="settings-section-intro">Special-format content for page 02.</p>
-            <label>
-              Headline
-              <input id="summaryTitle" value="You are the boss of your own body and care." />
-            </label>
-            <label>
-              Rights card
-              <input id="summaryRights" value="You have rights as a teen, we’ll walk you through them." />
-            </label>
-            <fieldset class="summary-setting-group">
-              <legend>Emotions card</legend>
-              <label>
-                Message
-                <input id="summaryEmotions" value="You may be feeling a lot of emotions." />
-              </label>
-              <label>
-                Supporting text
-                <input id="summaryEmotionsDetail" value="They’re all valid and there are practical and healthy ways to process them. We’re here to help." />
-              </label>
-            </fieldset>
-            <label>
-              Confidentiality card
-              <input id="summaryConfidentiality" value="We maintain absolute confidentiality with you." />
-            </label>
-            <fieldset class="summary-setting-group">
-              <legend>Medical billing card</legend>
-              <label>
-                Message
-                <input id="summaryBilling" value="You will not be directly billed for medical care related to your assault." />
-              </label>
-              <label>
-                Supporting text
-                <input id="summaryBillingDetail" value="This is the law in Illinois." />
-              </label>
-            </fieldset>
-            <label>
-              Resilience card
-              <input id="summaryOrganization" value="We are an organization called Resilience. We’ve got your back." />
-            </label>
-            <label>
-              Confidentiality footnote
-              <textarea id="summaryFootnote" rows="3">The only exception to confidentiality is if you are in immediate danger of hurting yourself or others.</textarea>
-            </label>
-          </div>
-        </details>
-
         <details class="editor-section settings-section" aria-labelledby="source-content" open>
           <summary><h2 id="source-content">Google Docs link</h2></summary>
           <div class="settings-section-content">
-            <p class="settings-section-intro">Paste the link to the document that maintains this packet.</p>
+            <p class="settings-section-intro">Paste a viewable Google Doc and format its headings, copy, lists, links, tables, and red bracketed page directives into the packet.</p>
+            <p class="settings-section-intro page-directive-note">Put <code>[Cover]</code>, <code>[Summary Graphic]</code>, or <code>[Letter]</code> in red on its own line to select a special page style. Use a red <code>&lt;page break&gt;</code> on its own line or immediately before content to force that content onto a new page.</p>
             <label class="source-link-control" for="docsUrl">
               Document URL
               <input
@@ -100,14 +30,18 @@
                 inputmode="url"
                 autocomplete="url"
                 spellcheck="false"
-                value="https://docs.google.com/document/d/1u_cX62gQvb2xD770e0bpoiOryG_DKsj0DKi7_G0hUdY/edit?usp=sharing"
-                placeholder="https://docs.google.com/document/d/…/edit"
+                placeholder="Paste link here"
               />
             </label>
+            <div id="docsLinkPreview" class="source-doc-preview" hidden>
+              <iframe id="docsPreviewFrame" title="Google Doc preview" loading="lazy"></iframe>
+            </div>
             <div class="source-link-actions">
-              <button id="importButton" class="primary-button" type="button">Use document link</button>
+              <button id="importButton" class="primary-button" type="button">Import &amp; format</button>
+              <button id="refreshButton" class="source-refresh-button" type="button">Refresh</button>
               <a id="openDocsLink" class="text-link" href="#" target="_blank" rel="noreferrer">Open Google Doc</a>
             </div>
+            <p class="source-access-note">The document must be shared so anyone with the link can view it.</p>
             <p id="importSummary" class="import-summary" aria-live="polite"></p>
             <div id="docsSource" hidden></div>
           </div>
@@ -118,8 +52,7 @@
       <section class="preview-panel" aria-labelledby="preview-heading">
         <header class="preview-toolbar">
           <div>
-            <p class="eyebrow">Deterministic Letter layout</p>
-            <h2 id="preview-heading">Paginated preview</h2>
+            <h2 id="preview-heading">Export Preview</h2>
           </div>
           <div class="preview-actions">
             <a class="toolbar-button toolbar-link" href="style-guide.html">Style system</a>
@@ -141,6 +74,15 @@
             >
               Show Figma
             </button>
+            <button
+              id="toggleSpread"
+              class="toolbar-button"
+              type="button"
+              aria-controls="pages"
+              aria-pressed="false"
+            >
+              Two-page view
+            </button>
             <label class="zoom-control">
               Zoom
               <input id="zoomRange" type="range" min="55" max="100" value="90" />
@@ -156,7 +98,7 @@
     </main>
 
     <div id="measurementStage" class="measurement-stage" aria-hidden="true"></div>
-    <script src="packet-content.js?v=20260713-11"></script>
-    <script src="app.js?v=20260713-13"></script>
+    <script src="packet-content.js?v=20260713-14"></script>
+    <script type="module" src="app.js?v=20260713-35"></script>
   </body>
 </html>
