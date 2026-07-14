@@ -181,25 +181,25 @@
         </div>
 
         <figure class="pagination-demo" aria-labelledby="pagination-demo-title">
+          <figcaption id="pagination-demo-title" class="pagination-demo-title">Break content to a new page with a red <code>&lt;page break&gt;</code></figcaption>
           <div class="pagination-demo-source">
-            <figcaption id="pagination-demo-title" class="pagination-demo-label">In Google Docs</figcaption>
+            <div class="pagination-demo-label">In Google Docs</div>
             <div class="pagination-doc-page">
               <div class="pagination-doc-toolbar" aria-hidden="true"><span></span><span></span><span></span></div>
               <div class="pagination-doc-content">
                 <span class="pagination-format-label">Heading 1</span>
-                <h2 class="pagination-doc-chapter-title">Hospital Visit</h2>
+                <h2 class="pagination-doc-chapter-title">Community garden</h2>
                 <span class="pagination-format-label">Heading 2</span>
-                <h3>What to expect</h3>
-                <p>A Resilience advocate can meet you at the hospital and explain your options.</p>
-                <div class="pagination-double-break">
-                  <div class="pagination-empty-line"></div>
-                  <code class="pagination-page-break-directive">&lt;page break&gt;</code>
-                  <div class="pagination-empty-line"></div>
-                  <span class="pagination-enter-label" aria-hidden="true"><kbd>⌘</kbd><kbd>↵</kbd></span>
+                <h3>Planning a garden</h3>
+                <p>Choose a sunny spot and begin with a few easy-to-grow plants.</p>
+                  <div class="pagination-double-break">
+                    <div class="pagination-empty-line"></div>
+                    <code class="pagination-page-break-directive">&lt;page break&gt;</code>
+                    <div class="pagination-empty-line"></div>
                 </div>
                 <span class="pagination-format-label">Heading 2</span>
-                <h3>Before you leave</h3>
-                <p>Ask for any information or support you need before leaving the hospital.</p>
+                <h3>Watering schedule</h3>
+                <p>Water in the morning and check the soil before adding more.</p>
               </div>
             </div>
           </div>
@@ -213,65 +213,76 @@
             <div class="pagination-demo-label">In the packet</div>
             <div class="pagination-result-pages" aria-label="Resulting packet pages">
               <article class="pagination-result-page" aria-label="Packet page before the page break">
-                <h3 class="pagination-page-chapter-title">Hospital Visit</h3>
+                <h3 class="pagination-page-chapter-title">Community garden</h3>
                 <div class="pagination-page-content">
-                  <h3>What to expect</h3>
-                  <p>A Resilience advocate can meet you at the hospital and explain your options.</p>
+                  <h3>Planning a garden</h3>
+                  <p>Choose a sunny spot and begin with a few easy-to-grow plants.</p>
                   <div class="pagination-page-space"><span>Available page space</span></div>
                 </div>
-                <footer class="pagination-page-footer"><span>Hospital Visit</span><span>10</span></footer>
+                <footer class="pagination-page-footer"><span>Community garden</span><span>1</span></footer>
               </article>
               <article class="pagination-result-page" aria-label="Packet page after the page break">
                 <div class="pagination-page-content">
-                  <h3>Before you leave</h3>
-                  <p>Ask for any information or support you need before leaving the hospital.</p>
-                  <span class="pagination-moved-label">New page from page break</span>
+                  <h3>Watering schedule</h3>
+                  <p>Water in the morning and check the soil before adding more.</p>
                 </div>
-                <footer class="pagination-page-footer"><span>Hospital Visit</span><span>11</span></footer>
+                <footer class="pagination-page-footer"><span>Community garden</span><span>2</span></footer>
               </article>
             </div>
           </div>
         </figure>
 
-        <div class="rule-grid">
-          <article class="rule-card rule-card-primary">
-            <div class="rule-number">AUTO</div>
-            <h3>Use the available page</h3>
-            <p>Subsections flow into the remaining page area instead of moving as a complete unit to a fresh page.</p>
-            <div class="rule-diagram"><span class="rule-block rule-block-short"></span><span class="rule-page-break"></span><span class="rule-block rule-block-whole"></span></div>
-          </article>
-          <article class="rule-card">
-            <div class="rule-number">SPLIT</div>
-            <h3>Keep semantic units intact</h3>
-            <p>Content splits between sentences, safe clause breaks (semicolon, colon, or em dash), list items, table rows, or other semantic blocks—not at arbitrary visual coordinates. A heading will not be left with only one line of paragraph copy when more content follows.</p>
-          </article>
-          <article class="rule-card">
-            <div class="rule-number">CONTINUE</div>
-            <h3>Repeat context</h3>
-            <p>When a section continues onto a new page, repeat its own heading with a continued badge unless the source specifies a header or none continuation variant. A nested Heading 3 continuation also repeats its Heading 2 parent for context.</p>
-          </article>
-          <article class="rule-card">
-            <div class="rule-number">RESERVE</div>
-            <h3>Protect the title band</h3>
-            <p>Chapter titles occupy the top of their opening page. Subsequent content pages keep the same y&nbsp;=&nbsp;136px content rail instead of drifting upward.</p>
-          </article>
-          <article class="rule-card">
-            <div class="rule-number">FORCE</div>
-            <h3>Honor explicit breaks</h3>
-            <p>Place a red <code>&lt;page break&gt;</code> on its own line before the content that needs a fresh page. The directive is control metadata and never appears in the packet.</p>
-          </article>
-          <article class="rule-card">
-            <div class="rule-number">WARN</div>
-            <h3>Block unsafe export</h3>
-            <p>A sentence or clause, list item, table row, or other indivisible component taller than the 585px content area produces a fatal warning and disables PDF export until it is corrected.</p>
-          </article>
-        </div>
+        <figure class="pagination-demo" aria-labelledby="chapter-start-demo-title">
+          <figcaption id="chapter-start-demo-title" class="pagination-demo-title">H1s always start on a new page.</figcaption>
+          <div class="pagination-demo-source">
+            <div class="pagination-demo-label">In Google Docs</div>
+            <div class="pagination-doc-page">
+              <div class="pagination-doc-toolbar" aria-hidden="true"><span></span><span></span><span></span></div>
+              <div class="pagination-doc-content">
+                <span class="pagination-format-label">Heading 1</span>
+                <h2 class="pagination-doc-chapter-title">Starting a garden</h2>
+                <span class="pagination-format-label">Heading 2</span>
+                <h3>Choosing a site</h3>
+                <p>Most vegetables grow best where they receive plenty of sun.</p>
+                <div class="pagination-doc-chapter-divider" aria-hidden="true"></div>
+                <span class="pagination-format-label">Heading 1</span>
+                <h2 class="pagination-doc-chapter-title">Caring for plants</h2>
+                <span class="pagination-format-label">Heading 2</span>
+                <h3>Watering</h3>
+                <p>Check the soil often and water when the top layer feels dry.</p>
+              </div>
+            </div>
+          </div>
 
-        <div class="rule-matrix">
-          <div class="rule-matrix-row rule-matrix-head"><span>Policy</span><span>Behavior</span><span>Use when</span></div>
-          <div class="rule-matrix-row"><strong>Auto flow</strong><span>Fill the current page, then split at a semantic boundary</span><span>Default for all subsection content</span></div>
-          <div class="rule-matrix-row"><strong>Red &lt;page break&gt;</strong><span>Begin the following content on a fresh page</span><span>Explicit editorial page control</span></div>
-        </div>
+          <div class="pagination-demo-transfer" aria-hidden="true">
+            <span>Publish</span>
+            <svg viewBox="0 0 76 18" focusable="false"><path d="M1 9h67M61 3l7 6-7 6" /></svg>
+          </div>
+
+          <div class="pagination-demo-result">
+            <div class="pagination-demo-label">In the packet</div>
+            <div class="pagination-result-pages" aria-label="Resulting packet pages">
+              <article class="pagination-result-page" aria-label="Packet page before the new chapter">
+                <h3 class="pagination-page-chapter-title">Starting a garden</h3>
+                <div class="pagination-page-content">
+                  <h3>Choosing a site</h3>
+                  <p>Most vegetables grow best where they receive plenty of sun.</p>
+                  <div class="pagination-page-space"><span>Available page space</span></div>
+                </div>
+                <footer class="pagination-page-footer"><span>Starting a garden</span><span>1</span></footer>
+              </article>
+              <article class="pagination-result-page" aria-label="New packet chapter page">
+                <h3 class="pagination-page-chapter-title">Caring for plants</h3>
+                <div class="pagination-page-content">
+                  <h3>Watering</h3>
+                  <p>Check the soil often and water when the top layer feels dry.</p>
+                </div>
+                <footer class="pagination-page-footer"><span>Caring for plants</span><span>2</span></footer>
+              </article>
+            </div>
+          </div>
+        </figure>
+
       </section>
     </main>
 
