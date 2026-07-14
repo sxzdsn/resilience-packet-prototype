@@ -5,6 +5,7 @@ const els = {
   settings: document.querySelector("#publisherSettings"),
   settingsToggle: document.querySelector("#toggleSettings"),
   figmaToggle: document.querySelector("#toggleFigma"),
+  preview: document.querySelector(".preview-panel"),
   title: document.querySelector("#packetTitle"),
   subtitle: document.querySelector("#packetSubtitle"),
   website: document.querySelector("#packetWebsite"),
@@ -34,6 +35,15 @@ const els = {
 
 let documentModel = { chapters: [] };
 let renderTimer;
+let previewCenterFrame;
+
+function centerPreviewPages() {
+  window.cancelAnimationFrame(previewCenterFrame);
+  previewCenterFrame = window.requestAnimationFrame(() => {
+    const maxScrollLeft = els.preview.scrollWidth - els.preview.clientWidth;
+    els.preview.scrollLeft = Math.max(0, maxScrollLeft / 2);
+  });
+}
 
 function slugify(value) {
   return value
@@ -112,6 +122,7 @@ function parseSource() {
       const id = `${chapter.id}-${slugify(text) || chapter.subsections.length + 1}`;
       subsection = {
         id,
+        level: Number(tag.slice(1)),
         title: text,
         titleHtml: cleanHtml(node),
         policy: node.dataset.policy || "auto",
@@ -399,6 +410,7 @@ function makeBlock(block) {
 function makeSubsection(subsection, blocks, continued = false) {
   const wrapper = document.createElement("section");
   wrapper.className = "subsection";
+  wrapper.classList.add(`subsection-level-${subsection.level || 2}`);
   wrapper.classList.toggle("is-chapter-last", subsection.isChapterLast === true);
   wrapper.dataset.subsection = subsection.id;
 
@@ -829,6 +841,7 @@ function paginate() {
   });
 
   els.pages.replaceChildren(...comparisons);
+  centerPreviewPages();
   els.warnings.textContent = warnings.join(" ");
   els.warnings.classList.toggle("is-visible", warnings.length > 0);
   const exportBlocked = fatalWarnings.length > 0;
@@ -892,16 +905,22 @@ els.zoom.addEventListener("input", () => {
   const value = Number(els.zoom.value);
   document.documentElement.style.setProperty("--page-scale", value / 100);
   els.zoomValue.textContent = `${value}%`;
+  centerPreviewPages();
 });
 els.settingsToggle.addEventListener("click", () => {
   const collapsed = els.shell.classList.toggle("settings-collapsed");
   els.settingsToggle.setAttribute("aria-expanded", String(!collapsed));
   els.settingsToggle.textContent = collapsed ? "Show settings" : "Hide settings";
+  centerPreviewPages();
 });
 els.figmaToggle.addEventListener("click", () => {
   const hidden = els.shell.classList.toggle("figma-hidden");
   els.figmaToggle.setAttribute("aria-pressed", String(hidden));
   els.figmaToggle.textContent = hidden ? "Show Figma" : "Hide Figma";
+  centerPreviewPages();
+});
+els.shell.addEventListener("transitionend", (event) => {
+  if (event.propertyName === "grid-template-columns") centerPreviewPages();
 });
 els.printButton.addEventListener("click", () => window.print());
 
