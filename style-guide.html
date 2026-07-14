@@ -183,19 +183,19 @@
         <div class="rule-grid">
           <article class="rule-card rule-card-primary">
             <div class="rule-number">AUTO</div>
-            <h3>Keep short subsections whole</h3>
-            <p>If the complete subsection fits within the remaining page area, it stays together. If it fits on a fresh page but not the current one, the whole unit moves.</p>
+            <h3>Use the available page</h3>
+            <p>Subsections flow into the remaining page area instead of moving as a complete unit to a fresh page.</p>
             <div class="rule-diagram"><span class="rule-block rule-block-short"></span><span class="rule-page-break"></span><span class="rule-block rule-block-whole"></span></div>
           </article>
           <article class="rule-card">
             <div class="rule-number">SPLIT</div>
-            <h3>Split only when necessary</h3>
-            <p>Long subsections split between paragraphs, list items, table rows, or other semantic blocks—not at arbitrary visual coordinates.</p>
+            <h3>Keep semantic units intact</h3>
+            <p>Content splits between sentences, safe clause breaks (semicolon, colon, or em dash), list items, table rows, or other semantic blocks—not at arbitrary visual coordinates. A heading will not be left with only one line of paragraph copy when more content follows.</p>
           </article>
           <article class="rule-card">
             <div class="rule-number">CONTINUE</div>
             <h3>Repeat context</h3>
-            <p>A split subsection repeats its heading on the next page. The continued badge appears unless that section uses the header-only or no-label continuation variant.</p>
+            <p>When a Heading 3 subsection continues onto a new page, repeat its own title with a continued badge. Its Heading 2 parent does not repeat.</p>
           </article>
           <article class="rule-card">
             <div class="rule-number">RESERVE</div>
@@ -216,9 +216,7 @@
 
         <div class="rule-matrix">
           <div class="rule-matrix-row rule-matrix-head"><span>Policy</span><span>Behavior</span><span>Use when</span></div>
-          <div class="rule-matrix-row"><strong>Auto</strong><span>Keep if possible; split when required</span><span>Default for most subsections</span></div>
-          <div class="rule-matrix-row"><strong>Keep together</strong><span>Move the complete unit to the next page</span><span>Short, tightly related content</span></div>
-          <div class="rule-matrix-row"><strong>Allow split</strong><span>Break at semantic block boundaries</span><span>Long legal or explanatory sections</span></div>
+          <div class="rule-matrix-row"><strong>Auto flow</strong><span>Fill the current page, then split at a semantic boundary</span><span>Default for all subsection content</span></div>
           <div class="rule-matrix-row"><strong>Page break before</strong><span>Begin on a fresh page</span><span>Major narrative transitions</span></div>
         </div>
       </section>

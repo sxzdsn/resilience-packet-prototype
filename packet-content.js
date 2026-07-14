@@ -1,13 +1,19 @@
 window.RESILIENCE_PREFACE = {
+  cover: {
+    title: "What you need to know",
+    subtitle: "Information Packet",
+    website: "ourresilience.org",
+    year: "2026",
+  },
   orientation: {
     title: "You are the boss of your own body and care.",
-    cards: [
-      { text: "You have rights as a teen, we’ll walk you through them." },
-      { text: "You may be feeling a lot of emotions.", detail: "They’re all valid and there are practical and healthy ways to process them. We’re here to help." },
-      { text: "We maintain absolute confidentiality with you." },
-      { text: "You will not be directly billed for medical care related to your assault.", detail: "This is the law in Illinois." },
-      { brand: "RESILIENCE", text: "We are an organization called Resilience.", detail: "We’ve got your back." },
-    ],
+    rights: "You have rights as a teen, we’ll walk you through them.",
+    emotions: "You may be feeling a lot of emotions.",
+    emotionsDetail: "They’re all valid and there are practical and healthy ways to process them. We’re here to help.",
+    confidentiality: "We maintain absolute confidentiality with you.",
+    billing: "You will not be directly billed for medical care related to your assault.",
+    billingDetail: "This is the law in Illinois.",
+    organization: "We are an organization called Resilience. We’ve got your back.",
     footnote: "The only exception to confidentiality is if you are in immediate danger of hurting yourself or others.",
   },
   letter: {
@@ -25,6 +31,7 @@ window.RESILIENCE_PREFACE = {
       "Reach out for more information or to request services. Please note that this isn’t a hotline and we will respond to messages Mon through Fri, 9am to 5pm",
     ],
     contacts: ["ourresilience.org", "312-443-9603", "info@ourresilience.org"],
+    hasDivider: true,
   },
   contents: {
     title: "In this packet",
@@ -67,7 +74,7 @@ window.RESILIENCE_PACKET_SOURCE = `
   <p>If you are in the emergency room (ER) at a Resilience partner hospital, the nurse will contact an advocate to come speak to you in-person. The advocate will be able to arrange ongoing follow-up services with Resilience, if you are interested.</p>
   <p>To request follow-up services or connect with an advocate at a later date, reach out to Resilience directly during regular business hours Mon through Fri, 9am to 5pm</p>
   <div data-block-type="contact-row"><span>ourresilience.org</span><span>312-443-9603</span><span>info@ourresilience.org</span></div>
-  <h2 data-policy="split">What Does an Advocate <u>Do</u>?</h2>
+  <h2>What Does an Advocate <u>Do</u>?</h2>
   <p>An advocate helps the survivor understand what legal and medical options are available to them and speaks up for the survivor’s rights and wishes.</p>
   <p>With the survivor’s permission, the advocate can talk with people like...</p>
   <ul><li>hospital staff,</li><li>law enforcement,</li><li>and attorneys</li></ul>
@@ -100,7 +107,7 @@ window.RESILIENCE_PACKET_SOURCE = `
   <p data-role="chapter-dek">You’re at the hospital for________________________________.</p>
   <h2>Your rights at the hospital</h2>
   <p>Illinois law (SASETA, 410 ILCS 70) requires that hospitals either provide treatment for or transfer sexual assault patients. For those who elect to provide treatment to sexual assault survivors, they are required to offer the following services for the first seven days post-assault (72 hours for survivors age 12 and younger).</p>
-  <h2 data-policy="split">The hospital is required to offer you:</h2>
+  <h2>The hospital is required to offer you:</h2>
   <blockquote><strong>Private Examination Room and Timely Response</strong><br>Hospitals are required to initiate a medical forensic examination for a sexual assault survivor within 90 minutes of the patients’ arrival, assuming the patient consents to services.</blockquote>
   <blockquote><strong>Access to a Qualified Medical Provider (QMP)</strong><br>Hospitals must provide a <strong>qualified medical provider</strong> (<strong>QMP</strong>) to complete your medical forensic examination. A QMP is a board-certified child abuse pediatrician, board-eligible child abuse pediatrician, a sexual assault forensic examiner, or a sexual assault nurse examiner who has access to photo documentation tools, and who participates in peer review. If a patient is not offered services by a QMP, they have the right to file a complaint with the Illinois Department of Public Health. A Resilience advocate can assist with this process, if requested.</blockquote>
   <div data-block-type="callout-group">

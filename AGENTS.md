@@ -22,7 +22,9 @@ When visual details are uncertain, inspect the actual Figma node. Do not approxi
 - `index.html`: Packet Publisher interface and side-by-side Figma/prototype comparison.
 - `style-guide.html`: Document style system, live styled-template preview, live Google Doc embed, component specimens, and pagination rules.
 - `packet-content.js`: Complete semantic packet source used by the publisher.
-- `app.js`: Content parsing, page generation, deterministic pagination, continuation behavior, Figma comparisons, and publisher controls.
+- `google-doc-import.js`: Google Docs HTML cleanup, semantic element mapping, and import filtering.
+- `figma-comparison.js`: Figma reference columns and bundled frame-compatibility decoration.
+- `app.js`: Semantic content modeling, page generation, deterministic pagination, continuation behavior, Figma comparisons, and publisher controls.
 - `styles.css`: Production packet geometry and component styling.
 - `style-guide.css` / `style-guide.js`: Style-guide layout and interactions.
 - `assets/figma/`: Local reference images for every Figma page.
@@ -36,7 +38,7 @@ There is no build step or package manager. Keep the project dependency-free unle
 From this folder:
 
 ```sh
-python3 -m http.server 8765
+python3 server.py 8765
 ```
 
 Open:
@@ -52,14 +54,17 @@ Whenever handing off a visual change, include the applicable plain clickable loc
 
 - Some pages are intentional special-format exceptions and must not be normalized to the standard chapter/content page system:
   - `Prototype · 01` is the packet cover.
-  - `Prototype · 02` is the summary graphic. Its visible copy is maintained through the dedicated Summary graphic publisher settings, not the Google Docs content mapping.
+  - `Prototype · 02` is the summary graphic.
+  - `Prototype · 03` is the introductory letter.
+  - These special pages use the red Google Docs directives `[Cover]`, `[Summary Graphic]`, and `[Letter]`; the directives are control metadata and never render as visible copy.
 - Page geometry is Figma’s native US Letter frame: `612 × 792` CSS pixels.
 - Print output uses a `4/3` zoom to produce physical US Letter pages.
 - Chapter-opening pages reserve the top title band.
 - Subsequent content begins on the shared `y = 136px` content rail; it must not drift upward into the title band.
 - Chapter titles occupy the reserved top area only on the opening page.
-- Short subsections stay together when they fit. Do not split a small semantic group merely to fill available space.
-- Long subsections may split only at semantic block boundaries.
+- Content flows into the available page space. Subsections may split between sentences, safe clause breaks (semicolon, colon, or em dash), list items, table rows, or other semantic block boundaries.
+- Individual sentences, list items, and table rows stay intact.
+- Do not leave a section heading with only one visual line of paragraph copy at a page bottom when more content follows; move that lead-in to the next page.
 - A split subsection repeats its heading on the next page and normally receives the `CONTINUED` badge.
 - Respect the existing `header` and `none` continuation variants where a badge or repeated heading is intentionally suppressed.
 - Footers reflect the current chapter and include the page number below the divider.
@@ -76,8 +81,12 @@ Whenever handing off a visual change, include the applicable plain clickable loc
 - Normal text → packet body copy.
 - Website, phone number, and email on one line → formatted contact group.
 - Google Docs tables → packet cards or parallel information rows.
+- Google Docs images → proportional packet image blocks using the embedded source image.
+- Red `[Cover]` → special cover template. Google Docs Title and Subtitle styles supply the main copy; website and year are detected from the remaining lines.
+- Red `[Summary Graphic]` → special summary-card template.
+- Red `[Letter]` → special introductory-letter template. Fully italicized Google Doc paragraphs are an authoring signal for the lower, smaller supporting-notes section; the rendered notes are not italic.
 
-The publisher accepts and validates a Google Docs URL, then renders the bundled semantic snapshot in `packet-content.js`. The URL is preserved as the editorial handoff link. It is not authenticated to the Google Docs API and does not claim to live-sync arbitrary documents. The style guide’s Google Doc state is a live external embed of the demo document above.
+The publisher accepts and validates a Google Docs URL, then uses the local `server.py` proxy to fetch link-shared Google Docs HTML and map its semantic structure into the packet. It does not authenticate to the Google Docs API, so private documents still require link-view access. Special-page directives are read before other red text is discarded. The default chapter import begins at “In this packet,” with “What’s Inside” accepted as an equivalent source heading. The bundled semantic snapshot remains the initial and failure-safe preview. The style guide’s Google Doc state is a live external embed of the demo document above.
 
 ## Design and QA Expectations
 
@@ -88,7 +97,7 @@ The publisher accepts and validates a Google Docs URL, then renders the bundled 
 - Keep frame-specific differences when Figma intentionally varies title type, content width, rail position, spacing, tables, or continuation placement.
 - After visual changes, reload the local page and compare the affected prototype page against its matching `assets/figma/page-*.png` reference.
 - Check both Figma-visible and Figma-hidden publisher states.
-- Verify the settings-collapse control, zoom control, print state, and style-guide Styled Template / Google Doc toggle when touching shared layout or interactions.
+- Verify the settings-collapse control, single-page / two-page preview toggle, zoom control, print state, and style-guide Styled Template / Google Doc toggle when touching shared layout or interactions.
 - Check for horizontal overflow, clipped content, broken images, and browser console errors.
 - Do not clear browser storage or overwrite unrelated user changes.
 
