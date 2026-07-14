@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resilience Packet — Style System</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="style-guide.css?v=20260713-10" />
+  </head>
+  <body class="guide-body">
+    <header class="guide-header">
+      <div class="guide-header-inner">
+        <a class="guide-back" href="index.html">← Packet publisher</a>
+        <div class="guide-kicker">Resilience information packet</div>
+        <h1>Document style system</h1>
+        <p class="guide-intro">A living reference for the visual language, page anatomy, content components, and deterministic pagination rules used by the prototype.</p>
+        <div class="guide-status-row">
+          <span>Letter · 612 × 792</span>
+          <span>Inter + Raleway</span>
+          <span>Print-safe</span>
+          <span>Google Docs-ready</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="guide-nav" aria-label="Style system sections">
+      <div class="guide-nav-inner">
+        <a href="#page-system">Page system</a>
+        <a href="#pagination">Pagination</a>
+      </div>
+    </nav>
+
+    <main class="guide-main">
+      <section id="page-system" class="guide-section page-system-section">
+        <div class="page-system-heading">
+          <h2>Page System</h2>
+          <p>All of the content inside Google Docs will <strong>automatically</strong> be formatted into this template. Here’s how it maps out:</p>
+        </div>
+
+        <div class="page-system-demo" data-page-system-view="styled">
+          <div class="page-system-toggle" role="group" aria-label="Page system preview">
+            <button class="page-system-toggle-button is-active" type="button" data-page-system-toggle="styled" aria-pressed="true">Styled Template</button>
+            <button class="page-system-toggle-button" type="button" data-page-system-toggle="docs" aria-pressed="false">Google Doc</button>
+          </div>
+
+          <div class="page-system-panel is-active" data-page-system-panel="styled">
+            <div class="page-system-pages" aria-label="Two styled template pages">
+              <article class="paper page-system-paper" aria-label="Styled template page one">
+                <h3 class="chapter-title">Chapter Title - Heading 1</h3>
+                <p class="chapter-dek">Optional chapter subtitle, body text after a title will look like this.</p>
+                <div class="page-content page-system-page-content">
+                  <section class="subsection">
+                    <div class="subsection-heading-row"><h4 class="subsection-heading">Chapter Section - Heading 2</h4></div>
+                    <p class="content-block">Body text after a chapter section will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                  </section>
+                  <section class="subsection is-chapter-last">
+                    <div class="subsection-heading-row"><h4 class="subsection-heading">Another Chapter Section</h4></div>
+                    <p class="content-block">Body text after a chapter section will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    <div class="content-block callout page-system-callout">
+                      <strong class="callout-title">Subsection - Heading 3</strong>
+                      <p>Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    </div>
+                    <div class="content-block callout page-system-callout">
+                      <strong class="callout-title">Another Subsection</strong>
+                      <p>Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    </div>
+                    <div class="content-block callout page-system-callout">
+                      <strong class="callout-title">Third Subsection</strong>
+                      <p>Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    </div>
+                    <div class="content-block callout page-system-callout">
+                      <strong class="callout-title">Fourth Subsection</strong>
+                      <p>Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    </div>
+                  </section>
+                </div>
+                <footer class="packet-footer"><span class="footer-label">Chapter Title</span><span class="footer-number">1</span></footer>
+              </article>
+
+              <article class="paper page-system-paper" aria-label="Styled template page two">
+                <div class="page-content page-system-page-content">
+                  <section class="subsection">
+                    <div class="subsection-heading-row">
+                      <h4 class="subsection-heading">Another Chapter Section</h4>
+                      <span class="continued-badge"><img src="assets/icons/continued.svg" alt="Continued" /></span>
+                    </div>
+                    <div class="content-block callout page-system-callout">
+                      <strong class="callout-title">Fifth Subsection</strong>
+                      <p>Body text will look like this. Body text will look like this.</p>
+                      <div class="card-grid page-system-card-grid">
+                        <article>This is information inside the first column of a table that is 1×2. The content will look like this.</article>
+                        <article>This is information inside the second column of a table that is 1×2. The content will look like this.</article>
+                      </div>
+                      <p class="page-system-after-cards">Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    </div>
+                  </section>
+                  <section class="subsection is-chapter-last">
+                    <div class="subsection-heading-row"><h4 class="subsection-heading">And Another Chapter Subtitle</h4></div>
+                    <p class="content-block">Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this. Body text will look like this.</p>
+                    <div class="contact-row page-system-contact-row">
+                      <span class="contact-entry"><img class="contact-icon" src="assets/icons/website.svg" alt="" />the-website.com</span>
+                      <span class="contact-entry"><img class="contact-icon" src="assets/icons/phone.svg" alt="" />312-555-5555</span>
+                      <span class="contact-entry"><img class="contact-icon" src="assets/icons/email.svg" alt="" />email@website.com</span>
+                    </div>
+                  </section>
+                </div>
+                <footer class="packet-footer"><span class="footer-label">Chapter Title</span><span class="footer-number">2</span></footer>
+              </article>
+            </div>
+          </div>
+
+          <div class="page-system-panel" data-page-system-panel="docs" hidden>
+            <div class="google-doc-embed-wrap">
+              <a class="google-doc-open-link" href="https://docs.google.com/document/d/1u_cX62gQvb2xD770e0bpoiOryG_DKsj0DKi7_G0hUdY/edit?tab=t.uyp0hctjs5rq" target="_blank" rel="noreferrer">Open in Google Docs ↗</a>
+              <iframe class="google-doc-embed" src="https://docs.google.com/document/d/1u_cX62gQvb2xD770e0bpoiOryG_DKsj0DKi7_G0hUdY/edit?tab=t.uyp0hctjs5rq" title="Editable Resilience Demo Google Doc with menus and formatting controls"></iframe>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-map-grid">
+          <article class="page-map-card page-map-card-tall map-heading-one">
+            <div class="page-map-label">Heading 1 + Subtitle</div>
+            <div class="map-heading-preview">
+              <div class="map-chapter-title">Chapter Title</div>
+              <div class="map-chapter-subtitle">Optional chapter subtitle</div>
+            </div>
+            <div class="page-map-divider" aria-hidden="true"></div>
+            <p class="page-map-description">Chapter Titles always start a New page. To format something as a Chapter Title, set it to <strong>Heading 1 on the Google Docs</strong>. Any body text immediately following Heading 1 will be formatted as the chapter subtitle.</p>
+            <code>Raleway · 24px · 700 · −0.48px,<br />Inter · 14px · 400 · −0.29px</code>
+          </article>
+          <article class="page-map-card page-map-card-tall map-heading-two">
+            <div class="page-map-label">Heading 2</div>
+            <div class="map-heading-preview">
+              <strong class="map-section-heading">Chapter Section - Heading 2</strong>
+              <p class="map-section-body">Body text after a chapter section will look like this.</p>
+            </div>
+            <div class="page-map-divider" aria-hidden="true"></div>
+            <p class="page-map-description">To format something as a Chapter Section, set it to <strong>Heading 2 on the Google Docs</strong>. If any Chapter Section has to break into a new page, it will appear again on the new page with a “continued” badge to keep the reader in context.</p>
+            <code>Inter · 14px · 600 · −0.29px</code>
+          </article>
+          <article class="page-map-card page-map-card-tall map-heading-three">
+            <div class="page-map-label">Heading 3</div>
+            <div class="map-heading-preview">
+              <div class="map-subsection-content">
+                <strong class="map-subsection-heading">Subsection</strong>
+                <p class="map-subsection-body">Body text in a subsection will look like this.</p>
+              </div>
+            </div>
+            <div class="page-map-divider" aria-hidden="true"></div>
+            <p class="page-map-description">To format something as a Chapter Section, set it to <strong>Heading 3 on the Google Docs.</strong> Subsections have an outline on the left to break up walls of text and make it easier to find information.</p>
+            <code>Inter · 14px · 400 · −0.29px</code>
+          </article>
+          <article class="page-map-card page-map-card-short map-normal-text">
+            <div class="page-map-label">Normal text</div>
+            <p class="map-normal-specimen">Body text inside all the different sections will look like this. Body text is just Normal text on Google Docs.</p>
+            <code>Inter · 14px · 600 · −0.29px</code>
+          </article>
+          <article class="page-map-card page-map-card-short map-contact-group">
+            <div class="page-map-label">Contact group</div>
+            <div class="page-map-contact">
+              <span class="contact-entry"><img class="contact-icon" src="assets/icons/website.svg" alt="" />the-website.com</span>
+              <span class="contact-entry"><img class="contact-icon" src="assets/icons/phone.svg" alt="" />312-555-5555</span>
+              <span class="contact-entry"><img class="contact-icon" src="assets/icons/email.svg" alt="" />email@website.com</span>
+            </div>
+            <p class="page-map-description">Anytime the website, phone number, and email appear in the Google Doc, they will be automatically formatted like this in the exported document.</p>
+          </article>
+          <article class="page-map-card page-map-card-short map-cards">
+            <div class="page-map-label">Cards</div>
+            <div class="map-card-example">This is information inside the first column of a table that is 1×1.</div>
+            <p class="page-map-description">To format something as a card, format it as a <strong>Table in Google Docs</strong>.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="pagination" class="guide-section">
+        <div class="guide-section-heading">
+          <div>
+            <h2>Pagination rules</h2>
+            <p>Content-aware decisions are made at semantic block boundaries.</p>
+          </div>
+        </div>
+
+        <div class="rule-grid">
+          <article class="rule-card rule-card-primary">
+            <div class="rule-number">AUTO</div>
+            <h3>Keep short subsections whole</h3>
+            <p>If the complete subsection fits within the remaining page area, it stays together. If it fits on a fresh page but not the current one, the whole unit moves.</p>
+            <div class="rule-diagram"><span class="rule-block rule-block-short"></span><span class="rule-page-break"></span><span class="rule-block rule-block-whole"></span></div>
+          </article>
+          <article class="rule-card">
+            <div class="rule-number">SPLIT</div>
+            <h3>Split only when necessary</h3>
+            <p>Long subsections split between paragraphs, list items, table rows, or other semantic blocks—not at arbitrary visual coordinates.</p>
+          </article>
+          <article class="rule-card">
+            <div class="rule-number">CONTINUE</div>
+            <h3>Repeat context</h3>
+            <p>A split subsection repeats its heading on the next page. The continued badge appears unless that section uses the header-only or no-label continuation variant.</p>
+          </article>
+          <article class="rule-card">
+            <div class="rule-number">RESERVE</div>
+            <h3>Protect the title band</h3>
+            <p>Chapter titles occupy the top of their opening page. Subsequent content pages keep the same y&nbsp;=&nbsp;136px content rail instead of drifting upward.</p>
+          </article>
+          <article class="rule-card">
+            <div class="rule-number">FORCE</div>
+            <h3>Honor explicit breaks</h3>
+            <p>Editors can force a fresh page before a subsection when the narrative or legal structure benefits from a deliberate transition.</p>
+          </article>
+          <article class="rule-card">
+            <div class="rule-number">WARN</div>
+            <h3>Block unsafe export</h3>
+            <p>An indivisible component taller than the 585px content area produces a fatal warning and disables PDF export until the content is corrected.</p>
+          </article>
+        </div>
+
+        <div class="rule-matrix">
+          <div class="rule-matrix-row rule-matrix-head"><span>Policy</span><span>Behavior</span><span>Use when</span></div>
+          <div class="rule-matrix-row"><strong>Auto</strong><span>Keep if possible; split when required</span><span>Default for most subsections</span></div>
+          <div class="rule-matrix-row"><strong>Keep together</strong><span>Move the complete unit to the next page</span><span>Short, tightly related content</span></div>
+          <div class="rule-matrix-row"><strong>Allow split</strong><span>Break at semantic block boundaries</span><span>Long legal or explanatory sections</span></div>
+          <div class="rule-matrix-row"><strong>Page break before</strong><span>Begin on a fresh page</span><span>Major narrative transitions</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="guide-site-footer">
+      <span>Resilience packet style system</span>
+      <a href="index.html">Return to publisher →</a>
+    </footer>
+    <script src="style-guide.js"></script>
+  </body>
+</html>
