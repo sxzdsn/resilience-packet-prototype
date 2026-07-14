@@ -8,6 +8,17 @@ This folder contains a dependency-free HTML/CSS/JavaScript prototype for publish
 
 Treat this as a design-led publishing system. Visual fidelity, considerate information hierarchy, and deterministic page breaks are core requirements—not optional polish.
 
+## Project Narrative
+
+**Making tools to meet clients where they are: Google Docs → Custom Design**
+
+- The patient-facing documents were redesigned around clarity, legibility, and reduced cognitive load.
+- The work included recommendations to the content structure, information architecture, and formatting so critical information is easier to navigate.
+- Resilience is a nonprofit supported largely by non-technical volunteers, with contributors changing frequently. This tool maps the Google Docs styles they already know directly to the custom packet template. Volunteers can paste a document link and generate a consistently formatted, print-ready packet.
+- Google Docs remains the organization’s source of truth and continues to handle collaboration, versioning, and document history. Maintaining the packet does not require design software, production expertise, or manually reformatting every update.
+
+The project is intended to reduce cognitive load for the survivors and families using these materials as well as for the volunteers maintaining them.
+
 ## Source of Truth
 
 - Packet Figma page: <https://www.figma.com/design/nX8yFtz9kKYPjBQSy8Q3W8/RESILIENCE-CHICAGO?node-id=92-6089>
