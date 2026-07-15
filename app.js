@@ -227,6 +227,14 @@ function cleanHtml(node) {
   return clone.innerHTML.trim();
 }
 
+function cleanHeadingHtml(node) {
+  const clone = node.cloneNode(true);
+  clone.querySelectorAll("strong,b,em,i,u").forEach((wrapper) => {
+    wrapper.replaceWith(...wrapper.childNodes);
+  });
+  return cleanHtml(clone);
+}
+
 function sanitizeHtmlString(html) {
   const container = document.createElement("span");
   container.innerHTML = html || "";
@@ -348,7 +356,7 @@ function parseSource() {
 
     if (tag === "h1") {
       const id = slugify(text) || `chapter-${chapters.length + 1}`;
-      chapter = { id, title: text, titleHtml: cleanHtml(node), footerLabel: text, dek: "", subsections: [] };
+      chapter = { id, title: text, titleHtml: cleanHeadingHtml(node), footerLabel: text, dek: "", subsections: [] };
       chapters.push(chapter);
       subsection = null;
       activeParentId = null;
