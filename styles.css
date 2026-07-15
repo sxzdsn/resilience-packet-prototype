@@ -836,6 +836,7 @@ textarea:focus {
   top: 56px;
   left: 42px;
   margin: 0;
+  font-family: Raleway, sans-serif;
   font-size: 21.607px;
   font-weight: 700;
   line-height: normal;
@@ -1090,10 +1091,10 @@ textarea:focus {
 
 .orientation-underline {
   position: absolute;
-  top: 220px;
+  top: 228px;
   left: 56.89px;
-  width: 157.156px;
-  height: 11.289px;
+  width: 158px;
+  height: 4px;
 }
 
 .orientation-footnote-asterisk {
