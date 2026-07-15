@@ -602,7 +602,7 @@ export function transformGoogleDocExport(html, options = {}) {
 
   if (!imported.some((node) => node.tagName === "H1")) {
     const heading = document.createElement("h1");
-    heading.textContent = doc.title.trim() || "Imported document";
+    heading.textContent = doc.title.trim() || "--";
     imported.unshift(heading);
   }
 
@@ -618,7 +618,7 @@ export function transformGoogleDocExport(html, options = {}) {
 
   return {
     nodes: normalizedImported,
-    title: doc.title.trim() || "Imported document",
+    title: doc.title.trim() || "--",
     importedImages,
     ignoredRedNodes,
     pageBreakDirectives,
