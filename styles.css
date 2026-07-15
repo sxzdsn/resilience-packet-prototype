@@ -664,11 +664,15 @@ textarea:focus {
   letter-spacing: -0.4492px;
 }
 
-.cover-title {
+.cover-heading-group {
   position: absolute;
-  top: 280px;
+  top: 369px;
   left: 40.53px;
   width: 413.325px;
+  transform: translateY(-50%);
+}
+
+.cover-title {
   margin: 0;
   font-family: Raleway, sans-serif;
   font-size: 60px;
@@ -678,10 +682,7 @@ textarea:focus {
 }
 
 .cover-subtitle {
-  position: absolute;
-  top: 430.08px;
-  left: 42.53px;
-  margin: 0;
+  margin: 12px 0 0 2px;
   color: rgba(0, 0, 0, 0.75);
   font-size: 23px;
   font-weight: 400;

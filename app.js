@@ -92,16 +92,16 @@ function stableId(value) {
   return (hash >>> 0).toString(36);
 }
 
-function googleDocsPreviewUrl(value) {
+function googleDocsProxyUrl(value) {
   const docsUrl = normalizeGoogleDocsUrl(value);
   if (!docsUrl) return "";
-  const url = new URL(docsUrl);
-  url.pathname = url.pathname.replace(/\/edit$/, "/preview");
-  return url.toString();
+  const proxyUrl = new URL(googleDocsProxyEndpoint, window.location.href);
+  proxyUrl.searchParams.set("url", docsUrl);
+  return proxyUrl.toString();
 }
 
 function syncDocsPreview(value = els.docsUrl.value) {
-  const previewUrl = googleDocsPreviewUrl(value);
+  const previewUrl = googleDocsProxyUrl(value);
   els.docsLinkPreview.hidden = !previewUrl;
   if (previewUrl && els.docsPreviewFrame.src !== previewUrl) els.docsPreviewFrame.src = previewUrl;
   if (!previewUrl) els.docsPreviewFrame.removeAttribute("src");
@@ -1241,8 +1241,10 @@ function makeCover(data = {}) {
   paper.setAttribute("aria-label", "Packet cover");
   paper.innerHTML = `
     <p class="cover-brand">RESILIENCE</p>
-    <h2 class="cover-title"></h2>
-    <p class="cover-subtitle"></p>
+    <div class="cover-heading-group">
+      <h2 class="cover-title"></h2>
+      <p class="cover-subtitle"></p>
+    </div>
     <p class="cover-meta cover-site"></p>
     <p class="cover-meta cover-year"></p>
   `;
@@ -1613,8 +1615,7 @@ async function importAndRender() {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 30000);
   try {
-    const proxyUrl = new URL(googleDocsProxyEndpoint, window.location.href);
-    proxyUrl.searchParams.set("url", docsUrl);
+    const proxyUrl = googleDocsProxyUrl(docsUrl);
     const response = await fetch(proxyUrl, {
       headers: { Accept: "text/html" },
       signal: controller.signal,
