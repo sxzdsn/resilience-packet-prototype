@@ -1,5 +1,7 @@
 # Resilience Packet Publisher Prototype
 
+Published at <https://sxzdsn.github.io/resilience-packet-prototype/>.
+
 A local, dependency-free browser prototype containing the complete 25-page Figma packet and demonstrating:
 
 - exact US Letter page geometry based on the Figma packet;
@@ -29,6 +31,12 @@ python3 server.py 8765
 
 Then open `http://localhost:8765/`.
 
-The local server provides a same-origin proxy for Google Docs' HTML export. Documents must be shared so anyone with the link can view them; private documents would require an authenticated Google API integration. Heading 1 becomes a chapter, Heading 2 a section, Heading 3 a nested section, and paragraphs, lists, links, inline emphasis, tables, and embedded images are preserved. Google Docs tables become the packet card grid shown in the style guide. Red `[Cover]`, `[Summary Graphic]`, and `[Letter]` lines select the three special templates and remain hidden in the output; fully italicized paragraphs within `[Letter]` are converted into its lower, smaller supporting-notes section without retaining italics. Special-page content is separated automatically, and other red editorial text is omitted.
+The local server provides a same-origin proxy for Google Docs' HTML export. The GitHub Pages build uses the scoped Cloudflare Worker at <https://resilience-packet-google-doc-proxy.steph-design.workers.dev>; its browser access is restricted to this project's GitHub Pages origin. Documents must be shared so anyone with the link can view them; private documents would require an authenticated Google API integration. Heading 1 becomes a chapter, Heading 2 a section, Heading 3 a nested section, and paragraphs, lists, links, inline emphasis, tables, and embedded images are preserved. Google Docs tables become the packet card grid shown in the style guide. Red `[Cover]`, `[Summary Graphic]`, and `[Letter]` lines select the three special templates and remain hidden in the output; fully italicized paragraphs within `[Letter]` are converted into its lower, smaller supporting-notes section without retaining italics. Special-page content is separated automatically, and other red editorial text is omitted.
+
+Deploy Worker updates from the repository root with:
+
+```sh
+npx --yes wrangler@latest deploy --config worker/wrangler.toml
+```
 
 The dependency-free runtime is split by responsibility: `google-doc-import.js` adapts exported Google Docs HTML, `app.js` builds and paginates the semantic model, `figma-comparison.js` owns comparison-only frame decoration, and `packet-content.js` supplies the bundled Figma-aligned fallback content.

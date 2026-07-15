@@ -2,6 +2,9 @@ import { filterImportedContent, transformGoogleDocExport } from "./google-doc-im
 import { getLegacyFrameClass, makePageComparisons } from "./figma-comparison.js?v=20260713-01";
 
 const sampleSource = window.RESILIENCE_PACKET_SOURCE;
+const googleDocsProxyEndpoint = window.location.hostname === "sxzdsn.github.io"
+  ? "https://resilience-packet-google-doc-proxy.steph-design.workers.dev/api/google-doc"
+  : "/api/google-doc";
 
 const els = {
   shell: document.querySelector(".app-shell"),
@@ -1610,7 +1613,9 @@ async function importAndRender() {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(`/api/google-doc?url=${encodeURIComponent(docsUrl)}`, {
+    const proxyUrl = new URL(googleDocsProxyEndpoint, window.location.href);
+    proxyUrl.searchParams.set("url", docsUrl);
+    const response = await fetch(proxyUrl, {
       headers: { Accept: "text/html" },
       signal: controller.signal,
     });
