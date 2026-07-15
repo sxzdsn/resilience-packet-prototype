@@ -6,6 +6,7 @@ const TAB_ID = /^[A-Za-z0-9._-]+$/;
 function corsHeaders(origin) {
   return {
     "Access-Control-Allow-Headers": "Accept",
+    "Access-Control-Expose-Headers": "X-Google-Doc-Title",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Max-Age": "86400",
@@ -43,6 +44,45 @@ function googleExportUrl(value) {
   return exportUrl;
 }
 
+function googleEditUrl(value) {
+  const url = new URL(value.trim());
+  const match = url.pathname.match(DOC_PATH);
+  if (url.protocol !== "https:" || url.hostname !== "docs.google.com" || !match) {
+    throw new Error("Paste a valid docs.google.com document link.");
+  }
+  const editUrl = new URL(`https://docs.google.com/document/d/${match[1]}/edit`);
+  const tab = url.searchParams.get("tab");
+  if (tab && TAB_ID.test(tab)) editUrl.searchParams.set("tab", tab);
+  return editUrl;
+}
+
+function decodeHtmlEntities(value) {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">");
+}
+
+async function fetchDocumentTitle(value) {
+  try {
+    const response = await fetch(googleEditUrl(value), {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 ResiliencePacketPublisher/1.0",
+      },
+      redirect: "follow",
+    });
+    if (!response.ok || !googleResponseHostAllowed(response.url)) return "";
+    const body = await response.text();
+    const match = body.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']*)/i);
+    return match ? decodeHtmlEntities(match[1]).trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function googleResponseHostAllowed(value) {
   try {
     const host = new URL(value).hostname;
@@ -69,11 +109,17 @@ export default {
       return jsonResponse(403, { error: "This proxy only accepts requests from the published packet." });
     }
 
+    const documentUrl = requestUrl.searchParams.get("url") || "";
     let exportUrl;
     try {
-      exportUrl = googleExportUrl(requestUrl.searchParams.get("url") || "");
+      exportUrl = googleExportUrl(documentUrl);
     } catch (error) {
       return jsonResponse(400, { error: error.message });
+    }
+
+    const documentTitlePromise = fetchDocumentTitle(documentUrl);
+    if (requestUrl.searchParams.get("metadata") === "1") {
+      return jsonResponse(200, { title: await documentTitlePromise }, origin || ALLOWED_ORIGIN);
     }
 
     let upstream;
@@ -119,11 +165,13 @@ export default {
       return jsonResponse(403, { error: "Google requested sign-in. Share the document so anyone with the link can view it, then try again." });
     }
 
+    const documentTitle = await documentTitlePromise;
     return new Response(body, {
       headers: {
         ...corsHeaders(origin || ALLOWED_ORIGIN),
         "Cache-Control": "no-store",
         "Content-Type": "text/html; charset=utf-8",
+        ...(documentTitle ? { "X-Google-Doc-Title": encodeURIComponent(documentTitle) } : {}),
       },
     });
   },

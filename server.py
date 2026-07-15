@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import urllib.error
@@ -16,6 +17,8 @@ from pathlib import Path
 DOC_PATH = re.compile(r"^/document/d/([A-Za-z0-9_-]+)")
 TAB_ID = re.compile(r"^[A-Za-z0-9._-]+$")
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
+MAX_METADATA_BYTES = 1024 * 1024
+OG_TITLE = re.compile(rb'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']*)', re.IGNORECASE)
 
 
 def google_export_url(value: str) -> str:
@@ -29,6 +32,36 @@ def google_export_url(value: str) -> str:
     if tab and TAB_ID.fullmatch(tab):
         query["tab"] = tab
     return f"https://docs.google.com/document/d/{match.group(1)}/export?{urllib.parse.urlencode(query)}"
+
+
+def google_edit_url(value: str) -> str:
+    parsed = urllib.parse.urlparse(value.strip())
+    match = DOC_PATH.match(parsed.path)
+    if parsed.scheme != "https" or parsed.hostname != "docs.google.com" or not match:
+        raise ValueError("Paste a valid docs.google.com document link.")
+    query = {}
+    tab = urllib.parse.parse_qs(parsed.query).get("tab", [""])[0]
+    if tab and TAB_ID.fullmatch(tab):
+        query["tab"] = tab
+    suffix = f"?{urllib.parse.urlencode(query)}" if query else ""
+    return f"https://docs.google.com/document/d/{match.group(1)}/edit{suffix}"
+
+
+def fetch_document_title(value: str) -> str:
+    request = urllib.request.Request(
+        google_edit_url(value),
+        headers={
+            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 ResiliencePacketPublisher/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read(MAX_METADATA_BYTES)
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return ""
+    match = OG_TITLE.search(body)
+    return html.unescape(match.group(1).decode("utf-8", errors="replace")).strip() if match else ""
 
 
 class PublisherHandler(SimpleHTTPRequestHandler):
@@ -57,6 +90,11 @@ class PublisherHandler(SimpleHTTPRequestHandler):
             export_url = google_export_url(document_url)
         except ValueError as error:
             self.send_json(400, {"error": str(error)})
+            return
+
+        document_title = fetch_document_title(document_url)
+        if urllib.parse.parse_qs(parsed.query).get("metadata", [""])[0] == "1":
+            self.send_json(200, {"title": document_title})
             return
 
         request = urllib.request.Request(
@@ -93,6 +131,8 @@ class PublisherHandler(SimpleHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        if document_title:
+            self.send_header("X-Google-Doc-Title", urllib.parse.quote(document_title, safe=""))
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

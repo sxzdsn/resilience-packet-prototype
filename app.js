@@ -5,11 +5,15 @@ const sampleSource = window.RESILIENCE_PACKET_SOURCE;
 const googleDocsProxyEndpoint = window.location.hostname === "sxzdsn.github.io"
   ? "https://resilience-packet-google-doc-proxy.steph-design.workers.dev/api/google-doc"
   : "/api/google-doc";
+const quickLinkTargets = [
+  "https://docs.google.com/document/d/13yhuKlw0WF3yjTP6YQW87R5v5gYrE31CMm5VcE5GNC8/edit?tab=t.nn8dmo3ghr8e",
+  "https://docs.google.com/document/d/11Pd71ax4_Ps8vTyMKdki3V1_9eDsTGmswztkotPlkvg/edit?tab=t.0#heading=h.e1r57fw80q0q",
+];
+const documentTitleCache = new Map();
+const isPublishedPacket = window.location.hostname === "sxzdsn.github.io";
 
 const els = {
   shell: document.querySelector(".app-shell"),
-  settings: document.querySelector("#publisherSettings"),
-  settingsToggle: document.querySelector("#toggleSettings"),
   figmaToggle: document.querySelector("#toggleFigma"),
   preview: document.querySelector(".preview-panel"),
   spreadToggle: document.querySelector("#toggleSpread"),
@@ -17,6 +21,9 @@ const els = {
   docsLink: document.querySelector("#openDocsLink"),
   docsLinkPreview: document.querySelector("#docsLinkPreview"),
   docsPreviewFrame: document.querySelector("#docsPreviewFrame"),
+  docsPreviewTitle: document.querySelector("#docsPreviewTitle"),
+  quickLinkSection: document.querySelector("#quickLinkSection"),
+  quickLink: document.querySelector("#quickLink"),
   source: document.querySelector("#docsSource"),
   importButton: document.querySelector("#importButton"),
   refreshButton: document.querySelector("#refreshButton"),
@@ -33,6 +40,8 @@ const els = {
   zoomValue: document.querySelector("#zoomValue"),
   printButton: document.querySelector("#printButton"),
 };
+
+if (isPublishedPacket) els.figmaToggle.hidden = true;
 
 let documentModel = { chapters: [] };
 let previewCenterFrame;
@@ -100,11 +109,82 @@ function googleDocsProxyUrl(value) {
   return proxyUrl.toString();
 }
 
+function googleDocumentId(value) {
+  try {
+    const url = new URL(value.trim());
+    const match = url.pathname.match(/^\/document\/d\/([a-zA-Z0-9_-]+)/);
+    return url.hostname === "docs.google.com" ? match?.[1] || "" : "";
+  } catch {
+    return "";
+  }
+}
+
+function quickLinkTarget(value) {
+  const currentId = googleDocumentId(value);
+  const currentIndex = quickLinkTargets.findIndex((target) => googleDocumentId(target) === currentId);
+  return currentIndex < 0 ? "" : quickLinkTargets[(currentIndex + 1) % quickLinkTargets.length];
+}
+
+function metadataProxyUrl(value) {
+  const proxyUrl = googleDocsProxyUrl(value);
+  if (!proxyUrl) return "";
+  const url = new URL(proxyUrl);
+  url.searchParams.set("metadata", "1");
+  return url.toString();
+}
+
+async function fetchDocumentTitle(value) {
+  const documentId = googleDocumentId(value);
+  if (!documentId) return "";
+  if (documentTitleCache.has(documentId)) return documentTitleCache.get(documentId);
+  try {
+    const response = await fetch(metadataProxyUrl(value), { headers: { Accept: "application/json" } });
+    if (!response.ok) return "";
+    const payload = await response.json();
+    const title = typeof payload.title === "string" ? payload.title.trim() : "";
+    if (title) documentTitleCache.set(documentId, title);
+    return title;
+  } catch {
+    return "";
+  }
+}
+
+async function refreshDocumentTitles(value) {
+  const normalized = normalizeGoogleDocsUrl(value);
+  if (!normalized) return;
+  const target = quickLinkTarget(normalized);
+  const [currentTitle, targetTitle] = await Promise.all([
+    fetchDocumentTitle(normalized),
+    target ? fetchDocumentTitle(target) : Promise.resolve(""),
+  ]);
+  if (normalizeGoogleDocsUrl(els.docsUrl.value) !== normalized) return;
+  els.docsPreviewTitle.textContent = currentTitle || "Google Doc preview";
+  if (target && els.quickLink.dataset.targetUrl === target) {
+    els.quickLink.textContent = targetTitle || "Google Doc";
+  }
+}
+
 function syncDocsPreview(value = els.docsUrl.value) {
   const previewUrl = googleDocsProxyUrl(value);
   els.docsLinkPreview.hidden = !previewUrl;
   if (previewUrl && els.docsPreviewFrame.src !== previewUrl) els.docsPreviewFrame.src = previewUrl;
   if (!previewUrl) els.docsPreviewFrame.removeAttribute("src");
+  const documentId = googleDocumentId(value);
+  els.docsPreviewTitle.textContent = documentTitleCache.get(documentId) || "Loading document…";
+  syncQuickLink(value);
+  if (previewUrl) void refreshDocumentTitles(value);
+}
+
+function syncQuickLink(value) {
+  const target = quickLinkTarget(value);
+  if (!target) {
+    els.quickLinkSection.hidden = true;
+    return;
+  }
+  const targetId = googleDocumentId(target);
+  els.quickLink.dataset.targetUrl = target;
+  els.quickLink.textContent = documentTitleCache.get(targetId) || "Loading document…";
+  els.quickLinkSection.hidden = false;
 }
 
 function safeImageSource(value) {
@@ -611,9 +691,7 @@ function createLibraryIllustration(asset) {
   const image = document.createElement("img");
   image.src = asset.src;
   image.alt = asset.name;
-  const label = document.createElement("p");
-  label.textContent = asset.name;
-  item.append(image, label);
+  item.append(image);
   item.addEventListener("dragstart", (event) => {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("application/x-resilience-illustration", asset.id);
@@ -1584,8 +1662,7 @@ function paginate() {
 function setImportBusy(isBusy) {
   els.importButton.disabled = isBusy;
   els.refreshButton.disabled = isBusy;
-  els.importButton.textContent = isBusy ? "Importing…" : "Import & format";
-  els.refreshButton.textContent = isBusy ? "Refreshing…" : "Refresh";
+  els.quickLink.disabled = isBusy;
 }
 
 async function responseError(response) {
@@ -1621,6 +1698,18 @@ async function importAndRender() {
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(await responseError(response));
+    const encodedTitle = response.headers.get("X-Google-Doc-Title");
+    if (encodedTitle) {
+      const documentId = googleDocumentId(docsUrl);
+      let title = "";
+      try {
+        title = decodeURIComponent(encodedTitle);
+      } catch {
+        title = encodedTitle;
+      }
+      if (documentId && title) documentTitleCache.set(documentId, title);
+      els.docsPreviewTitle.textContent = title;
+    }
     const transformed = transformGoogleDocExport(await response.text(), { ignoreRedText: true });
     els.source.replaceChildren(...filterImportedContent(transformed.nodes));
     const nextModel = parseSource();
@@ -1632,6 +1721,7 @@ async function importAndRender() {
     paginate();
     els.importSummary.textContent = "";
     els.importSummary.hidden = true;
+    syncDocsPreview(docsUrl);
   } catch (error) {
     const message = error.name === "AbortError"
       ? "The document took too long to respond. Try again."
@@ -1651,7 +1741,8 @@ function normalizeGoogleDocsUrl(value) {
     if (url.hostname !== "docs.google.com" || !match) return "";
     const tab = url.searchParams.get("tab");
     const normalized = `https://docs.google.com/document/d/${match[1]}/edit`;
-    return tab && /^[a-zA-Z0-9._-]+$/.test(tab) ? `${normalized}?tab=${encodeURIComponent(tab)}` : normalized;
+    const tabUrl = tab && /^[a-zA-Z0-9._-]+$/.test(tab) ? `${normalized}?tab=${encodeURIComponent(tab)}` : normalized;
+    return /^#heading=h\.[a-zA-Z0-9_-]+$/.test(url.hash) ? `${tabUrl}${url.hash}` : tabUrl;
   } catch {
     return "";
   }
@@ -1665,6 +1756,12 @@ function setPreviewZoom(value) {
 
 els.importButton.addEventListener("click", importAndRender);
 els.refreshButton.addEventListener("click", importAndRender);
+els.quickLink.addEventListener("click", () => {
+  const targetUrl = els.quickLink.dataset.targetUrl;
+  if (!targetUrl) return;
+  els.docsUrl.value = targetUrl;
+  importAndRender();
+});
 els.saveIllustrations.addEventListener("click", saveIllustrations);
 els.illustrationInput.addEventListener("change", async () => {
   await addIllustrationFiles(els.illustrationInput.files);
@@ -1690,20 +1787,19 @@ els.zoom.addEventListener("input", () => {
   setPreviewZoom(value);
   centerPreviewPages();
 });
-els.settingsToggle.addEventListener("click", () => {
-  const collapsed = els.shell.classList.toggle("settings-collapsed");
-  els.settingsToggle.setAttribute("aria-expanded", String(!collapsed));
-  els.settingsToggle.textContent = collapsed ? "Show settings" : "Hide settings";
-  centerPreviewPages();
-});
 els.figmaToggle.addEventListener("click", () => {
+  const showingFigma = els.shell.classList.contains("figma-hidden");
+  if (showingFigma && els.shell.classList.contains("two-page-preview")) {
+    els.shell.classList.remove("two-page-preview");
+    els.spreadToggle.setAttribute("aria-pressed", "false");
+    els.spreadToggle.textContent = "Two-page view";
+    els.pages.setAttribute("aria-label", "Rendered packet pages");
+    setPreviewZoom(singlePageZoom);
+  }
   const hidden = els.shell.classList.toggle("figma-hidden");
   els.figmaToggle.setAttribute("aria-pressed", String(hidden));
   els.figmaToggle.textContent = hidden ? "Show Figma" : "Hide Figma";
   centerPreviewPages();
-});
-els.shell.addEventListener("transitionend", (event) => {
-  if (event.propertyName === "grid-template-columns") centerPreviewPages();
 });
 els.spreadToggle.addEventListener("click", () => {
   const enabled = els.shell.classList.toggle("two-page-preview");

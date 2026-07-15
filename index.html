@@ -4,16 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resilience Packet Publisher — Prototype</title>
-    <link rel="stylesheet" href="styles.css?v=20260714-11" />
+    <link rel="stylesheet" href="styles.css?v=20260715-32" />
   </head>
   <body>
     <main class="app-shell figma-hidden">
       <aside id="publisherSettings" class="editor-panel">
         <header class="editor-header">
-          <div>
-            <p class="eyebrow">Working prototype</p>
-            <h1>Packet publisher</h1>
-          </div>
+          <h1>Packet Template</h1>
           <span class="status-dot" title="Changes render locally"></span>
         </header>
 
@@ -21,14 +18,7 @@
           <summary><h2 id="source-content">Google Docs link</h2></summary>
           <div class="settings-section-content">
             <div class="source-intro-row">
-              <p class="settings-section-intro">Paste a viewable Google Doc file here. It will automatically convert the Docs styling into this template.</p>
-              <details class="import-help">
-                <summary aria-label="Google Docs import help">?</summary>
-                <div class="import-help-popover">
-                  <p>Format its headings, copy, lists, links, tables, and red bracketed page directives into the packet.</p>
-                  <p>Put <strong><code>[Cover]</code></strong>, <strong><code>[Summary Graphic]</code></strong>, or <strong><code>[Letter]</code></strong> in red on its own line to select a special page style. Use a red <strong><code>&lt;page break&gt;</code></strong> on its own line or immediately before content to force that content onto a new page.</p>
-                </div>
-              </details>
+              <p class="settings-section-intro">Paste a viewable Google Doc file here. The document must be shared so anyone with the link can view it. It will automatically convert the Docs styling into this template.</p>
             </div>
             <label class="source-link-control" for="docsUrl">
               Document URL
@@ -43,15 +33,31 @@
               />
             </label>
             <div id="docsLinkPreview" class="source-doc-preview" hidden>
-              <iframe id="docsPreviewFrame" title="Google Doc preview" loading="lazy"></iframe>
+              <div class="source-doc-preview-title">
+                <span id="docsPreviewTitle">Google Doc preview</span>
+                <details class="import-help">
+                  <summary aria-label="Google Docs import help">?</summary>
+                  <div class="import-help-popover">
+                    <p>Format its headings, copy, lists, links, tables, and red bracketed page directives into the packet.</p>
+                    <p>Put <strong><code>[Cover]</code></strong>, <strong><code>[Summary Graphic]</code></strong>, or <strong><code>[Letter]</code></strong> in red on its own line to select a special page style. Use a red <strong><code>&lt;page break&gt;</code></strong> on its own line or immediately before content to force that content onto a new page.</p>
+                    <p><a class="import-help-link" href="style-guide.html">View the full style guide</a></p>
+                  </div>
+                </details>
+              </div>
+              <div class="source-doc-preview-frame">
+                <iframe id="docsPreviewFrame" title="Google Doc preview" loading="lazy"></iframe>
+              </div>
             </div>
             <div class="source-link-actions">
               <button id="importButton" class="primary-button" type="button">Import &amp; format</button>
               <button id="refreshButton" class="source-refresh-button" type="button">Refresh</button>
-              <a id="openDocsLink" class="text-link" href="#" target="_blank" rel="noreferrer">Open Google Doc</a>
+              <a id="openDocsLink" class="text-link" href="#" target="_blank" rel="noreferrer">Open in Google Doc</a>
             </div>
-            <p class="source-access-note">The document must be shared so anyone with the link can view it.</p>
             <p id="importSummary" class="import-summary" aria-live="polite" hidden></p>
+            <div id="quickLinkSection" class="quick-link-section" hidden>
+              <span class="quick-link-label">Quick Link</span>
+              <button id="quickLink" class="quick-link" type="button"></button>
+            </div>
             <div id="docsSource" hidden></div>
           </div>
         </details>
@@ -78,20 +84,17 @@
 
       <section class="preview-panel" aria-labelledby="preview-heading">
         <header class="preview-toolbar">
-          <div>
-            <h2 id="preview-heading">Export Preview</h2>
+          <h2 id="preview-heading">Export Preview</h2>
+        </header>
+        <div class="preview-content">
+          <div class="preview-main">
+            <div id="renderWarnings" class="render-warnings" aria-live="polite"></div>
+            <div id="printBlocker" class="print-blocker" aria-live="assertive"></div>
+            <div id="pages" class="pages" aria-label="Rendered packet pages"></div>
           </div>
-          <div class="preview-actions">
+          <div class="preview-controls">
+            <button id="printButton" class="secondary-button" type="button">Print / Save PDF</button>
             <a class="toolbar-button toolbar-link" href="style-guide.html">Style system</a>
-            <button
-              id="toggleSettings"
-              class="toolbar-button"
-              type="button"
-              aria-controls="publisherSettings"
-              aria-expanded="true"
-            >
-              Hide settings
-            </button>
             <button
               id="toggleFigma"
               class="toolbar-button"
@@ -111,21 +114,17 @@
               Two-page view
             </button>
             <label class="zoom-control">
-              Zoom
-              <input id="zoomRange" type="range" min="55" max="100" value="90" />
+              <span class="zoom-label">Zoom</span>
               <span id="zoomValue">90%</span>
+              <input id="zoomRange" type="range" min="55" max="100" value="90" />
             </label>
-            <button id="printButton" class="secondary-button" type="button">Print / Save PDF</button>
           </div>
-        </header>
-        <div id="renderWarnings" class="render-warnings" aria-live="polite"></div>
-        <div id="printBlocker" class="print-blocker" aria-live="assertive"></div>
-        <div id="pages" class="pages" aria-label="Rendered packet pages"></div>
+        </div>
       </section>
     </main>
 
     <div id="measurementStage" class="measurement-stage" aria-hidden="true"></div>
     <script src="packet-content.js?v=20260713-14"></script>
-  <script type="module" src="app.js?v=20260714-23"></script>
+    <script type="module" src="app.js?v=20260715-34"></script>
   </body>
 </html>
