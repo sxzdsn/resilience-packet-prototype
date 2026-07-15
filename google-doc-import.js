@@ -78,7 +78,10 @@ function makeContactSourceBlock(items) {
 function makeCardGridSourceBlock(table) {
   const grid = table.ownerDocument.createElement("div");
   grid.dataset.blockType = "card-grid";
-  grid.dataset.layout = "columns";
+  // Preserve the source table's orientation. A one-column Google Docs table
+  // is a vertical run of rows, not a pair of side-by-side cards.
+  const isSingleColumn = [...table.rows].every((row) => row.cells.length === 1);
+  grid.dataset.layout = isSingleColumn ? "stack" : "columns";
   grid.dataset.importedTable = "true";
   [...table.rows].forEach((row) => {
     [...row.cells].forEach((cell) => {

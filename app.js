@@ -974,15 +974,15 @@ function makeSubsection(subsection, blocks, continued = false) {
 
 function makeParentContinuation(parent) {
   const wrapper = document.createElement("section");
-  wrapper.className = "subsection parent-continuation";
+  wrapper.className = "subsection parent-continuation is-continuation";
   wrapper.dataset.subsection = parent.id;
-  wrapper.append(makeSubsectionHeadingRow(parent));
+  wrapper.append(makeSubsectionHeadingRow(parent, true));
   return wrapper;
 }
 
-function makeSubsectionWithParentContext(subsection, blocks, continued = false, parent = null) {
+function makeSubsectionWithParentContext(subsection, blocks, continued = false, parent = null, repeatParent = false) {
   const subsectionNode = makeSubsection(subsection, blocks, continued);
-  if (!continued || subsection.depth !== 3 || !parent) {
+  if (!repeatParent || subsection.depth !== 3 || !parent || subsection.continuationStyle === "none") {
     return { node: subsectionNode, subsectionNode };
   }
 
@@ -1000,8 +1000,8 @@ function measure(node, frameClass = "") {
   return container.getBoundingClientRect().height;
 }
 
-function renderMeasuredSubsection(subsection, blocks, continued = false, frameClass = "", parent = null) {
-  const rendered = makeSubsectionWithParentContext(subsection, blocks, continued, parent);
+function renderMeasuredSubsection(subsection, blocks, continued = false, frameClass = "", parent = null, repeatParent = false) {
+  const rendered = makeSubsectionWithParentContext(subsection, blocks, continued, parent, repeatParent);
   return {
     ...rendered,
     height: measure(rendered.node.cloneNode(true), frameClass),
@@ -1448,17 +1448,20 @@ function paginate() {
       const parentSubsection = subsection.depth === 3
         ? chapter.subsections.find((candidate) => candidate.id === subsection.parentId)
         : null;
+      const nextSubsection = chapter.subsections[subsectionIndex + 1];
+      const hasParentContextOnCurrentPage = () => parentSubsection && [...current.content.querySelectorAll(".subsection")]
+        .some((section) => section.dataset.subsection === parentSubsection.id);
       const renderSubsection = (blocks, continued, frameClass = current.measurementFrameClass) => (
         renderMeasuredSubsection(
           subsection,
           blocks,
           continued,
           frameClass,
-          continued ? parentSubsection : null,
+          parentSubsection,
+          !hasParentContextOnCurrentPage(),
         )
       );
       let complete = renderSubsection(subsection.blocks, startsContinued);
-      const nextSubsection = chapter.subsections[subsectionIndex + 1];
 
       // A Google Docs page break can land on the first body block beneath an
       // empty H2. In that case the break belongs before the H2, not between the
@@ -1487,6 +1490,17 @@ function paginate() {
       }
       const available = current.maxHeight - current.used;
 
+      // Bottom padding creates rhythm between subsections, but it is not
+      // required when that padding alone would push an otherwise complete
+      // subsection onto the next page. In that case the subsection becomes
+      // the terminal item on this page and the visible content stays intact.
+      if (complete.height > available) {
+        complete.subsectionNode.classList.add("is-page-terminal");
+        const terminalHeight = measure(complete.node.cloneNode(true), current.measurementFrameClass);
+        if (terminalHeight <= available) complete.height = terminalHeight;
+        else complete.subsectionNode.classList.remove("is-page-terminal");
+      }
+
       const hasForcedBlockBreak = subsection.blocks.some((block) => block.pageBreakBefore);
       if (!hasForcedBlockBreak && complete.height <= available) {
         current.content.append(complete.node);
@@ -1510,13 +1524,11 @@ function paginate() {
         }
 
         const selected = [];
-        let selectedHeight = 0;
         for (const block of remaining) {
           if (selected.length && block.pageBreakBefore) break;
           const candidate = renderSubsection([...selected, block], continued);
           if (candidate.height <= current.maxHeight - current.used || selected.length === 0) {
             selected.push(block);
-            selectedHeight = candidate.height;
           } else {
             break;
           }
@@ -1535,8 +1547,9 @@ function paginate() {
 
         const fragment = renderSubsection(selected, continued);
         fragment.subsectionNode.classList.toggle("continues-next-page", remaining.length > selected.length);
+        const fragmentHeight = measure(fragment.node.cloneNode(true), current.measurementFrameClass);
         current.content.append(fragment.node);
-        current.used += selectedHeight;
+        current.used += fragmentHeight;
         remaining = remaining.slice(selected.length);
 
         if (remaining.length) {

@@ -1134,6 +1134,14 @@ textarea:focus {
   font-size: 12px;
 }
 
+/* The Minors Rights table system uses Figma's wider 529px content rail.
+   Apply it from the content itself so live Google Doc imports measure and
+   render the same way as the bundled frame-specific pages. */
+.page-content:has(.content-table),
+.measurement-content:has(.content-table) {
+  width: 529px;
+}
+
 .page-content {
   position: absolute;
   top: 136px;
@@ -1184,7 +1192,8 @@ textarea:focus {
   bottom: 0;
 }
 
-.subsection.is-chapter-last {
+.subsection.is-chapter-last,
+.subsection.is-page-terminal {
   padding-bottom: 0;
 }
 
@@ -1211,6 +1220,10 @@ textarea:focus {
 
 .subsection.is-nested .subsection-heading {
   font-size: 12px;
+}
+
+.subsection.is-nested .subsection-heading-row {
+  margin-bottom: 4px;
 }
 
 .subsection-heading strong {
