@@ -16,6 +16,7 @@ const els = {
   shell: document.querySelector(".app-shell"),
   figmaToggle: document.querySelector("#toggleFigma"),
   preview: document.querySelector(".preview-panel"),
+  previewMain: document.querySelector(".preview-main"),
   spreadToggle: document.querySelector("#toggleSpread"),
   docsUrl: document.querySelector("#docsUrl"),
   docsLink: document.querySelector("#openDocsLink"),
@@ -76,13 +77,12 @@ const illustrationStorageKey = "resilience-packet-illustrations-v1";
 function centerPreviewPages() {
   window.cancelAnimationFrame(previewCenterFrame);
   previewCenterFrame = window.requestAnimationFrame(() => {
-    const maxScrollLeft = els.preview.scrollWidth - els.preview.clientWidth;
-    els.preview.scrollLeft = Math.max(0, maxScrollLeft / 2);
+    const maxScrollLeft = els.previewMain.scrollWidth - els.previewMain.clientWidth;
+    els.previewMain.scrollLeft = Math.max(0, maxScrollLeft / 2);
   });
 }
 let isLiveDocument = false;
 let importedSpecialPages = [];
-let singlePageZoom = 90;
 
 function slugify(value) {
   return value
@@ -227,6 +227,91 @@ function cleanHtml(node) {
   return clone.innerHTML.trim();
 }
 
+function sanitizeHtmlString(html) {
+  const container = document.createElement("span");
+  container.innerHTML = html || "";
+  return cleanHtml(container);
+}
+
+function safeLinkHref(value) {
+  const candidate = (value || "").trim();
+  if (!candidate) return "";
+  if (/^[\w.+-]+@[\w.-]+\.[a-z]{2,}$/i.test(candidate)) return `mailto:${candidate}`;
+  if (/^(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}$/.test(candidate)) {
+    const prefix = candidate.startsWith("+") ? "+" : "";
+    return `tel:${prefix}${candidate.replace(/\D/g, "")}`;
+  }
+
+  let normalized = candidate;
+  if (/^(?:www\.)?(?:[a-z0-9-]+\.)+(?:org|com|net|edu)(?:\/\S*)?$/i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+  if (/^(?:mailto:|tel:)/i.test(normalized)) return normalized;
+
+  try {
+    const url = new URL(normalized);
+    if (!/^https?:$/.test(url.protocol)) return "";
+    if (["google.com", "www.google.com"].includes(url.hostname.toLowerCase()) && url.pathname === "/url") {
+      return safeLinkHref(url.searchParams.get("q") || url.searchParams.get("url") || "");
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function activateLinks(root) {
+  const pattern = /[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:https?:\/\/|www\.)[^\s<]+|(?:[a-z0-9-]+\.)+(?:org|com|net|edu)(?:\/[^\s<]*)?|(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/gi;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) {
+    if (!walker.currentNode.parentElement?.closest("a")) textNodes.push(walker.currentNode);
+  }
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.nodeValue || "";
+    const matches = [...text.matchAll(pattern)];
+    if (!matches.length) return;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    matches.forEach((match) => {
+      const raw = match[0];
+      const linkText = raw.replace(/[.,;:!?]+$/, "");
+      const trailing = raw.slice(linkText.length);
+      const href = safeLinkHref(linkText);
+      fragment.append(document.createTextNode(text.slice(cursor, match.index)));
+      if (href) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.textContent = linkText;
+        fragment.append(anchor);
+      } else {
+        fragment.append(document.createTextNode(linkText));
+      }
+      if (trailing) fragment.append(document.createTextNode(trailing));
+      cursor = match.index + raw.length;
+    });
+    fragment.append(document.createTextNode(text.slice(cursor)));
+    textNode.replaceWith(fragment);
+  });
+
+  root.querySelectorAll("a[href]").forEach((anchor) => {
+    const href = safeLinkHref(anchor.getAttribute("href"));
+    if (!href) {
+      anchor.removeAttribute("href");
+      return;
+    }
+    anchor.href = href;
+    if (/^https?:/i.test(href)) {
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+    } else {
+      anchor.removeAttribute("target");
+      anchor.removeAttribute("rel");
+    }
+  });
+}
+
 function parseSource() {
   const chapters = [];
   let chapter = null;
@@ -263,7 +348,7 @@ function parseSource() {
 
     if (tag === "h1") {
       const id = slugify(text) || `chapter-${chapters.length + 1}`;
-      chapter = { id, title: text, footerLabel: text, dek: "", subsections: [] };
+      chapter = { id, title: text, titleHtml: cleanHtml(node), footerLabel: text, dek: "", subsections: [] };
       chapters.push(chapter);
       subsection = null;
       activeParentId = null;
@@ -547,8 +632,10 @@ function makeBlock(block) {
     row.className = "content-block contact-row";
     const icons = ["website.svg", "phone.svg", "email.svg"];
     block.items.forEach((item, index) => {
-      const entry = document.createElement("span");
+      const href = safeLinkHref(item);
+      const entry = document.createElement(href ? "a" : "span");
       entry.className = "contact-entry";
+      if (href) entry.href = href;
       entry.innerHTML = `<img class="contact-icon" src="assets/icons/${icons[index] || icons[0]}" alt="">${escapeHtml(item)}`;
       row.append(entry);
     });
@@ -556,8 +643,10 @@ function makeBlock(block) {
   }
 
   if (block.type === "resource-link") {
-    const row = document.createElement("div");
+    const href = safeLinkHref(block.text);
+    const row = document.createElement(href ? "a" : "div");
     row.className = "content-block resource-link";
+    if (href) row.href = href;
     row.innerHTML = `<img src="assets/icons/website.svg" alt="">${escapeHtml(block.text)}`;
     return row;
   }
@@ -1163,6 +1252,7 @@ function splitAtSafeClauseBoundaries(subsection, sentence, frameClass = "") {
 }
 
 function fragmentParagraphAtSemanticBoundaries(subsection, block, blockIndex, maxHeight, warnings, fatalWarnings, frameClass = "") {
+  if (/<a\b/i.test(block.html)) return [block];
   const text = plainText(block.html);
   const segmenter = typeof Intl?.Segmenter === "function"
     ? new Intl.Segmenter(undefined, { granularity: "sentence" })
@@ -1275,7 +1365,7 @@ function makePaper(chapter, showChapterTitle, pageNumber) {
   if (showChapterTitle && chapter.showTitle !== false) {
     const title = document.createElement("h2");
     title.className = "chapter-title";
-    title.textContent = chapter.title;
+    title.innerHTML = chapter.titleHtml || escapeHtml(chapter.title);
     paper.append(title);
 
     if (chapter.dek) {
@@ -1400,9 +1490,11 @@ function makeLetterPage(data = {}) {
   const letter = {
     salutation: "Hello,",
     paragraphs: [],
+    paragraphsHtml: [],
     signoff: "Sincerely,",
     organization: "",
     notes: [],
+    notesHtml: [],
     contacts: [],
     hasDivider: false,
     isImported: false,
@@ -1419,9 +1511,11 @@ function makeLetterPage(data = {}) {
   salutation.textContent = letter.salutation;
   const main = document.createElement("div");
   main.className = "letter-main";
-  letter.paragraphs.forEach((text) => {
+  letter.paragraphs.forEach((text, index) => {
     const p = document.createElement("p");
-    p.textContent = text;
+    p.innerHTML = letter.paragraphsHtml[index]
+      ? sanitizeHtmlString(letter.paragraphsHtml[index])
+      : escapeHtml(text);
     main.append(p);
   });
   const signoff = document.createElement("p");
@@ -1429,9 +1523,11 @@ function makeLetterPage(data = {}) {
   signoff.innerHTML = `${escapeHtml(letter.signoff)}<br><strong>${escapeHtml(letter.organization)}</strong>`;
   const notes = document.createElement("div");
   notes.className = "letter-notes";
-  letter.notes.forEach((text) => {
+  letter.notes.forEach((text, index) => {
     const p = document.createElement("p");
-    p.textContent = text;
+    p.innerHTML = letter.notesHtml[index]
+      ? sanitizeHtmlString(letter.notesHtml[index])
+      : escapeHtml(text);
     notes.append(p);
   });
   if (letter.contacts.length) notes.append(makeBlock({ type: "contact-row", items: letter.contacts }));
@@ -1644,6 +1740,7 @@ function paginate() {
   });
 
   els.pages.replaceChildren(...makePageComparisons(output, isLiveDocument));
+  activateLinks(els.pages);
   renderPlacedIllustrations();
   initializeIllustrationDragging();
   initializeIllustrationResizing();
@@ -1794,7 +1891,6 @@ els.figmaToggle.addEventListener("click", () => {
     els.spreadToggle.setAttribute("aria-pressed", "false");
     els.spreadToggle.textContent = "Two-page view";
     els.pages.setAttribute("aria-label", "Rendered packet pages");
-    setPreviewZoom(singlePageZoom);
   }
   const hidden = els.shell.classList.toggle("figma-hidden");
   els.figmaToggle.setAttribute("aria-pressed", String(hidden));
@@ -1804,13 +1900,9 @@ els.figmaToggle.addEventListener("click", () => {
 els.spreadToggle.addEventListener("click", () => {
   const enabled = els.shell.classList.toggle("two-page-preview");
   if (enabled) {
-    singlePageZoom = Number(els.zoom.value);
     els.shell.classList.add("figma-hidden");
     els.figmaToggle.setAttribute("aria-pressed", "true");
     els.figmaToggle.textContent = "Show Figma";
-    setPreviewZoom(68);
-  } else {
-    setPreviewZoom(singlePageZoom);
   }
   els.spreadToggle.setAttribute("aria-pressed", String(enabled));
   els.spreadToggle.textContent = enabled ? "Single-page view" : "Two-page view";

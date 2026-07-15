@@ -61,7 +61,19 @@ function contactItemsFromText(value) {
   const email = value.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0];
   const phone = value.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/)?.[0];
   const website = value.match(/(?:https?:\/\/|www\.)[^\s,;]+|\b[a-z0-9-]+\.(?:org|com|net|edu)\b[^\s,;]*/i)?.[0];
-  return website && phone && email ? [website.replace(/[.)]+$/, ""), phone, email] : null;
+  if (!website || !phone || !email) return null;
+
+  // Contact groups are an authoring convention: one line containing only the
+  // three contact values. Do not turn a prose paragraph into a contact row
+  // merely because it happens to mention all three.
+  const remainingText = value
+    .replace(website, "")
+    .replace(phone, "")
+    .replace(email, "")
+    .replace(/[\s,;|•·/\\—–-]+/g, "");
+  if (remainingText) return null;
+
+  return [website.replace(/[.)]+$/, ""), phone, email];
 }
 
 function makeContactSourceBlock(items) {
@@ -344,10 +356,15 @@ function meaningfulText(nodes) {
   return nodes.map((node) => node.textContent.trim()).filter(Boolean);
 }
 
-function textWithLineBreaks(node) {
-  const clone = node.cloneNode(true);
-  clone.querySelectorAll("br").forEach((breakNode) => breakNode.replaceWith("\n"));
-  return clone.textContent.trim();
+function letterLineEntries(node, italic) {
+  return node.innerHTML
+    .split(/<br\b[^>]*>/i)
+    .map((html) => {
+      const container = node.ownerDocument.createElement("div");
+      container.innerHTML = html;
+      return { text: container.textContent.trim(), html: container.innerHTML.trim(), italic };
+    })
+    .filter(({ text }) => Boolean(text));
 }
 
 function parseCover(nodes) {
@@ -422,16 +439,12 @@ function isItalicBlock(node, styleMap) {
 function parseLetter(nodes, styleMap) {
   const entries = nodes.flatMap((node) => {
     const italic = isItalicBlock(node, styleMap);
-    return textWithLineBreaks(node)
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((text) => ({ text, italic }));
+    return letterLineEntries(node, italic);
   });
   const blocks = entries.map(({ text }) => text);
   const salutationIndex = blocks.findIndex((text) => /^hello\b/i.test(text));
   const signoffIndex = blocks.findIndex((text) => /^(?:sincerely|with care|best),?$/i.test(text));
-  const contactLineIndex = entries.findIndex(({ text }) => /^\[.*\]$/.test(text) && Boolean(contactItemsFromText(text)));
+  const contactLineIndex = entries.findIndex(({ text }) => Boolean(contactItemsFromText(text)));
   const contacts = contactLineIndex >= 0 ? contactItemsFromText(entries[contactLineIndex].text) : [];
   const bodyStart = salutationIndex >= 0 ? salutationIndex + 1 : 0;
   const bodyEnd = signoffIndex >= 0 ? signoffIndex : blocks.length;
@@ -445,12 +458,16 @@ function parseLetter(nodes, styleMap) {
     ].includes(index));
   const bodyEntries = candidates.filter(({ index }) => index >= bodyStart && index < bodyEnd);
   const isSupportingNote = ({ italic }) => italic;
+  const bodyParagraphs = bodyEntries.filter((entry) => !isSupportingNote(entry));
+  const supportingNotes = candidates.filter(isSupportingNote);
   return {
     salutation: salutationIndex >= 0 ? blocks[salutationIndex] : "Hello,",
-    paragraphs: bodyEntries.filter((entry) => !isSupportingNote(entry)).map(({ text }) => text),
+    paragraphs: bodyParagraphs.map(({ text }) => text),
+    paragraphsHtml: bodyParagraphs.map(({ html }) => html),
     signoff: signoffIndex >= 0 ? blocks[signoffIndex] : "Sincerely,",
     organization: signoffIndex >= 0 ? blocks[signoffIndex + 1] || "" : "",
-    notes: candidates.filter(isSupportingNote).map(({ text }) => text),
+    notes: supportingNotes.map(({ text }) => text),
+    notesHtml: supportingNotes.map(({ html }) => html),
     contacts,
     hasDivider: nodes.some((node) => node.tagName === "HR" && !isPageBreak(node, styleMap)),
     isImported: true,
