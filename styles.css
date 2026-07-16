@@ -358,16 +358,6 @@ textarea:focus {
   opacity: 0.55;
 }
 
-.illustration-upload-control {
-  margin-top: 14px;
-}
-
-.illustration-upload-control input {
-  height: auto;
-  padding: 7px;
-  font-size: 11px;
-}
-
 .illustration-library {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -378,11 +368,6 @@ textarea:focus {
   border: 1px dashed #bdbdbd;
   border-radius: 6px;
   background: #fafafa;
-}
-
-.illustration-library.is-drop-target {
-  border-color: #111;
-  background: #f1f1f1;
 }
 
 .illustration-library-empty {
@@ -417,6 +402,7 @@ textarea:focus {
 
 .illustration-save-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-top: 10px;
@@ -431,6 +417,17 @@ textarea:focus {
 
 .illustration-save-status.is-dirty {
   color: #9b5b12;
+}
+
+.illustration-library-support {
+  margin: 10px 0 0;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.illustration-library-support a {
+  color: inherit;
 }
 
 .source-link-control input[aria-invalid="true"] {
@@ -1608,6 +1605,15 @@ textarea:focus {
   margin: 0 0 12px;
 }
 
+.illustration-anchor {
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .preview-illustration {
   --illustration-x: 0px;
   --illustration-y: 0px;
@@ -1656,18 +1662,21 @@ textarea:focus {
   user-select: none;
 }
 
-.placed-illustration {
+.placed-illustration,
+.anchored-illustration {
   position: absolute;
   z-index: 3;
   width: 132px;
   margin: 0;
 }
 
-.placed-illustration img {
+.placed-illustration img,
+.anchored-illustration img {
   width: 100%;
 }
 
-.placed-illustration::after {
+.placed-illustration::after,
+.anchored-illustration::after {
   content: "Drag to place · pull corner to resize";
 }
 
@@ -1690,10 +1699,10 @@ textarea:focus {
   transition: opacity 120ms ease;
 }
 
-.placed-illustration:hover .illustration-remove,
-.placed-illustration:focus-within .illustration-remove,
-.placed-illustration:hover .illustration-resize,
-.placed-illustration:focus-within .illustration-resize {
+.preview-illustration:hover .illustration-remove,
+.preview-illustration:focus-within .illustration-remove,
+.preview-illustration:hover .illustration-resize,
+.preview-illustration:focus-within .illustration-resize {
   opacity: 1;
 }
 

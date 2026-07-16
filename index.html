@@ -10,7 +10,7 @@
     <main class="app-shell figma-hidden">
       <aside id="publisherSettings" class="editor-panel">
         <header class="editor-header">
-          <h1>Packet Template</h1>
+          <h1>Resilience Template</h1>
           <span class="status-dot" title="Changes render locally"></span>
         </header>
 
@@ -70,21 +70,18 @@
           </div>
         </details>
 
-        <details class="editor-section settings-section illustration-library-section" aria-labelledby="illustration-library-heading" open>
+        <details class="editor-section settings-section illustration-library-section" aria-labelledby="illustration-library-heading">
           <summary><h2 id="illustration-library-heading">Illustration library</h2></summary>
           <div class="settings-section-content">
-            <p class="settings-section-intro">Add illustrations here, then drag one directly onto a packet page.</p>
-            <label class="illustration-upload-control" for="illustrationInput">
-              Add illustrations
-              <input id="illustrationInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple />
-            </label>
+            <p class="settings-section-intro">Images from the imported Google Doc appear here. Drag a thumbnail directly onto any packet page.</p>
             <div id="illustrationLibrary" class="illustration-library" aria-live="polite">
-              <p class="illustration-library-empty">Drop illustration files here, or add them above. Then drag a thumbnail onto the packet.</p>
+              <p class="illustration-library-empty">Import a Google Doc containing images to build this library.</p>
             </div>
             <div class="illustration-save-row">
               <button id="saveIllustrations" class="source-refresh-button" type="button">Save illustrations</button>
               <p id="illustrationSaveStatus" class="illustration-save-status" aria-live="polite"></p>
             </div>
+            <p class="illustration-library-support">if the you find yourself constantly adjusting the illustrations, <a id="illustrationSupportEmail" href="mailto:stephaniexzhao@gmail.com">email steph</a> to update</p>
           </div>
         </details>
 
@@ -102,7 +99,7 @@
           </div>
           <div class="preview-controls">
             <button id="printButton" class="secondary-button" type="button">Print / Save PDF</button>
-            <a class="toolbar-button toolbar-link" href="style-guide.html">Style system</a>
+            <a class="toolbar-button toolbar-link" href="style-guide.html">How it works</a>
             <button
               id="toggleFigma"
               class="toolbar-button"

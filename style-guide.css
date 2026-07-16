@@ -442,6 +442,10 @@
   margin-top: auto;
 }
 
+.map-images .page-map-description {
+  margin-top: 12px;
+}
+
 .page-map-contact {
   display: grid;
   width: 100%;

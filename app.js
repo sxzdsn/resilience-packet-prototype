@@ -1,4 +1,4 @@
-import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260714-05";
+import { filterImportedContent, transformGoogleDocExport } from "./google-doc-import.js?v=20260715-01";
 import { getLegacyFrameClass, makePageComparisons } from "./figma-comparison.js?v=20260713-01";
 
 const sampleSource = window.RESILIENCE_PACKET_SOURCE;
@@ -29,9 +29,9 @@ const els = {
   importButton: document.querySelector("#importButton"),
   refreshButton: document.querySelector("#refreshButton"),
   importSummary: document.querySelector("#importSummary"),
-  illustrationInput: document.querySelector("#illustrationInput"),
   illustrationLibrary: document.querySelector("#illustrationLibrary"),
   saveIllustrations: document.querySelector("#saveIllustrations"),
+  illustrationSupportEmail: document.querySelector("#illustrationSupportEmail"),
   illustrationSaveStatus: document.querySelector("#illustrationSaveStatus"),
   pages: document.querySelector("#pages"),
   warnings: document.querySelector("#renderWarnings"),
@@ -47,32 +47,21 @@ if (isPublishedPacket) els.figmaToggle.hidden = true;
 let documentModel = { chapters: [] };
 let previewCenterFrame;
 const illustrationPositions = new Map();
-const illustrationLibrary = [
-  {
-    id: "bundled-hospital-intake-form",
-    name: "Hospital intake form",
-    src: "assets/illustrations/hospital-intake-form.webp",
-  },
-  {
-    id: "bundled-legal-scales",
-    name: "Legal scales",
-    src: "assets/illustrations/legal-scales.webp",
-  },
-  {
-    id: "bundled-school-supplies",
-    name: "School supplies",
-    src: "assets/illustrations/school-supplies.webp",
-  },
-  {
-    id: "bundled-school-backpack",
-    name: "School backpack",
-    src: "assets/illustrations/school-backpack.webp",
-  },
-];
+const illustrationWidths = new Map();
+const hiddenIllustrationIds = new Set();
+const illustrationLibrary = [];
 const placedIllustrations = [];
+const pendingSavedPlacements = [];
 let illustrationSequence = 0;
-const bundledIllustrationIds = new Set(illustrationLibrary.map((asset) => asset.id));
+let savedPlacementsRestored = false;
 const illustrationStorageKey = "resilience-packet-illustrations-v1";
+const illustrationLayoutVersion = 2;
+const defaultIllustrationLayouts = new Map([
+  ["illustration-2-1qhlv9t", { frame: "15", left: 409.34, top: 576.68, width: 190.35 }],
+  ["illustration-3-1u88zji", { frame: "16", left: 448.75, top: 603.27, width: 135.3 }],
+  ["illustration-4-tlve7u", { frame: "18", left: 398.38, top: 59.74, width: 157.63 }],
+  ["illustration-5-1on3w24", { frame: "21", left: 394.1, top: 48.81, width: 167.72 }],
+]);
 
 function centerPreviewPages() {
   window.cancelAnimationFrame(previewCenterFrame);
@@ -453,6 +442,7 @@ function parseSource() {
           caption: node.querySelector("figcaption")?.textContent.trim() || "",
           width: Number(node.dataset.width) || 0,
           height: Number(node.dataset.height) || 0,
+          inline: node.dataset.imageLayout === "inline",
         });
       }
     } else if (node.dataset.blockType === "contact-row") {
@@ -616,23 +606,28 @@ function makeBlock(block) {
   }
 
   if (block.type === "image") {
-    const figure = document.createElement("figure");
-    figure.className = "content-block content-image preview-illustration";
-    figure.dataset.illustrationId = block.id || `illustration-${block.src}`;
-    figure.tabIndex = 0;
-    figure.setAttribute("aria-label", `${block.alt || "Illustration"}. Drag to position it in the preview.`);
-    const image = document.createElement("img");
-    image.src = safeImageSource(block.src) ? block.src : "";
-    image.alt = block.alt || "";
-    if (block.width > 0) image.width = block.width;
-    if (block.height > 0) image.height = block.height;
-    figure.append(image);
-    if (block.caption) {
-      const caption = document.createElement("figcaption");
-      caption.textContent = block.caption;
-      figure.append(caption);
+    if (block.inline) {
+      const figure = document.createElement("figure");
+      figure.className = "content-block content-image inline-illustration";
+      const image = document.createElement("img");
+      image.src = safeImageSource(block.src) ? block.src : "";
+      image.alt = block.alt || "";
+      if (block.width > 0) image.width = block.width;
+      if (block.height > 0) image.height = block.height;
+      figure.append(image);
+      if (block.caption) {
+        const caption = document.createElement("figcaption");
+        caption.textContent = block.caption;
+        figure.append(caption);
+      }
+      return figure;
     }
-    return figure;
+
+    const anchor = document.createElement("span");
+    anchor.className = "illustration-anchor";
+    anchor.dataset.illustrationId = block.id || `illustration-${block.src}`;
+    anchor.setAttribute("aria-hidden", "true");
+    return anchor;
   }
 
   if (block.type === "contact-row") {
@@ -803,7 +798,7 @@ function renderIllustrationLibrary() {
   if (!illustrationLibrary.length) {
     const empty = document.createElement("p");
     empty.className = "illustration-library-empty";
-    empty.textContent = "Drop illustration files here, or add them above. Then drag a thumbnail onto the packet.";
+    empty.textContent = "Import a Google Doc containing images to build this library.";
     els.illustrationLibrary.append(empty);
     return;
   }
@@ -821,18 +816,42 @@ function markIllustrationsDirty() {
 
 function saveIllustrations() {
   const snapshot = {
-    assets: illustrationLibrary
-      .filter((asset) => !bundledIllustrationIds.has(asset.id))
-      .map(({ id, name, src }) => ({ id, name, src })),
+    version: illustrationLayoutVersion,
     placements: placedIllustrations.map(({ id, assetId, frame, x, y, width }) => ({ id, assetId, frame, x, y, width })),
     positions: [...illustrationPositions.entries()].map(([id, position]) => ({ id, x: position.x, y: position.y })),
+    widths: [...illustrationWidths.entries()].map(([id, width]) => ({ id, width })),
+    hiddenIllustrations: [...hiddenIllustrationIds],
   };
   try {
     window.localStorage.setItem(illustrationStorageKey, JSON.stringify(snapshot));
-    setIllustrationSaveStatus("Saved in this browser. It will be restored when this packet opens again.");
+    setIllustrationSaveStatus("saved in browser");
   } catch {
     setIllustrationSaveStatus("Couldn’t save these illustrations. The browser may be out of storage.", true);
   }
+}
+
+function currentIllustrationLayout() {
+  const illustrations = [...els.pages.querySelectorAll(".preview-illustration")].map((illustration) => {
+    const paper = illustration.closest(".paper");
+    const styles = window.getComputedStyle(illustration);
+    const x = Number.parseFloat(styles.getPropertyValue("--illustration-x")) || 0;
+    const y = Number.parseFloat(styles.getPropertyValue("--illustration-y")) || 0;
+    return {
+      id: illustration.dataset.illustrationId,
+      frame: paper?.dataset.figmaFrame || "",
+      left: Number((illustration.offsetLeft + x).toFixed(2)),
+      top: Number((illustration.offsetTop + y).toFixed(2)),
+      width: Number(Number.parseFloat(illustration.style.width).toFixed(2)),
+    };
+  });
+  return { illustrations };
+}
+
+function updateIllustrationSupportEmail() {
+  const subject = encodeURIComponent("Resilience illustration layout update");
+  const layout = JSON.stringify(currentIllustrationLayout(), null, 2);
+  const body = encodeURIComponent(`Hi Steph,\n\nPlease update the illustration layout with these values:\n\n${layout}`);
+  els.illustrationSupportEmail.href = `mailto:stephaniexzhao@gmail.com?subject=${subject}&body=${body}`;
 }
 
 function restoreSavedIllustrations() {
@@ -845,20 +864,13 @@ function restoreSavedIllustrations() {
     return;
   }
   if (!snapshot || typeof snapshot !== "object") return;
-
-  const knownIds = new Set(illustrationLibrary.map((asset) => asset.id));
-  const savedAssets = Array.isArray(snapshot.assets) ? snapshot.assets : [];
-  savedAssets.forEach((asset) => {
-    if (!asset || typeof asset.id !== "string" || typeof asset.name !== "string" || !safeImageSource(asset.src) || knownIds.has(asset.id)) return;
-    illustrationLibrary.push({ id: asset.id, name: asset.name, src: asset.src });
-    knownIds.add(asset.id);
-  });
+  const snapshotVersion = Number(snapshot.version) || 1;
 
   const savedPlacements = Array.isArray(snapshot.placements) ? snapshot.placements : [];
   savedPlacements.forEach((placement) => {
-    if (!placement || typeof placement.id !== "string" || !knownIds.has(placement.assetId) || typeof placement.frame !== "string") return;
+    if (!placement || typeof placement.id !== "string" || typeof placement.assetId !== "string" || typeof placement.frame !== "string") return;
     if (![placement.x, placement.y, placement.width].every(Number.isFinite)) return;
-    placedIllustrations.push({
+    pendingSavedPlacements.push({
       id: placement.id,
       assetId: placement.assetId,
       frame: placement.frame,
@@ -871,37 +883,33 @@ function restoreSavedIllustrations() {
   const savedPositions = Array.isArray(snapshot.positions) ? snapshot.positions : [];
   savedPositions.forEach((position) => {
     if (!position || typeof position.id !== "string" || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+    if (snapshotVersion < illustrationLayoutVersion && defaultIllustrationLayouts.has(position.id)) return;
     illustrationPositions.set(position.id, { x: position.x, y: position.y });
   });
 
-  const savedNumbers = [...illustrationLibrary, ...placedIllustrations]
+  const savedWidths = Array.isArray(snapshot.widths) ? snapshot.widths : [];
+  savedWidths.forEach((item) => {
+    if (!item || typeof item.id !== "string" || !Number.isFinite(item.width) || item.width < 52) return;
+    if (snapshotVersion < illustrationLayoutVersion && defaultIllustrationLayouts.has(item.id)) return;
+    illustrationWidths.set(item.id, item.width);
+  });
+
+  const savedHiddenIllustrations = Array.isArray(snapshot.hiddenIllustrations) ? snapshot.hiddenIllustrations : [];
+  savedHiddenIllustrations.forEach((id) => {
+    if (typeof id === "string") hiddenIllustrationIds.add(id);
+  });
+
+  const savedNumbers = pendingSavedPlacements
     .map((item) => Number(item.id.match(/(?:asset|placed)-(\d+)$/)?.[1] || 0));
   illustrationSequence = Math.max(illustrationSequence, ...savedNumbers);
-  if (placedIllustrations.length || savedAssets.length) {
+  if (
+    pendingSavedPlacements.length
+    || savedPositions.length
+    || savedWidths.length
+    || savedHiddenIllustrations.length
+  ) {
     setIllustrationSaveStatus("Saved illustration layout restored.");
   }
-}
-
-function readIllustrationFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve({
-      id: `asset-${++illustrationSequence}`,
-      name: file.name.replace(/\.[^.]+$/, "") || "Illustration",
-      src: reader.result,
-    }));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function addIllustrationFiles(files) {
-  const imageFiles = [...files].filter((file) => file.type.startsWith("image/"));
-  const assets = await Promise.all(imageFiles.map(readIllustrationFile));
-  illustrationLibrary.push(...assets);
-  renderIllustrationLibrary();
-  if (assets.length) markIllustrationsDirty();
-  return assets;
 }
 
 function placeLibraryIllustration(assetId, paper, clientX, clientY) {
@@ -924,6 +932,127 @@ function placeLibraryIllustration(assetId, paper, clientX, clientY) {
   markIllustrationsDirty();
 }
 
+function makeIllustrationResizeHandle(name) {
+  const resize = document.createElement("button");
+  resize.className = "illustration-resize";
+  resize.type = "button";
+  resize.setAttribute("aria-label", `Resize ${name || "illustration"}`);
+  return resize;
+}
+
+function makeIllustrationRemoveButton(name, onRemove) {
+  const remove = document.createElement("button");
+  remove.className = "illustration-remove";
+  remove.type = "button";
+  remove.setAttribute("aria-label", `Remove ${name || "illustration"}`);
+  remove.textContent = "×";
+  remove.addEventListener("click", onRemove);
+  return remove;
+}
+
+function documentIllustrationsById() {
+  const illustrations = new Map();
+  documentModel.chapters.forEach((chapter) => {
+    chapter.subsections.forEach((subsection) => {
+      subsection.blocks.forEach((block) => {
+        if (block.type === "image") illustrations.set(block.id, block);
+      });
+    });
+  });
+  return illustrations;
+}
+
+function syncIllustrationLibraryFromDocument() {
+  const nextLibrary = [];
+  const knownSources = new Set();
+
+  documentIllustrationsById().forEach((block) => {
+    if (!safeImageSource(block.src) || knownSources.has(block.src)) return;
+    knownSources.add(block.src);
+    nextLibrary.push({
+      id: `document-asset-${stableId(block.src)}`,
+      name: block.alt || block.caption || `Google Doc image ${nextLibrary.length + 1}`,
+      src: block.src,
+    });
+  });
+
+  illustrationLibrary.splice(0, illustrationLibrary.length, ...nextLibrary);
+  const availableAssetIds = new Set(illustrationLibrary.map((asset) => asset.id));
+  const availablePlacements = placedIllustrations.filter((placement) => availableAssetIds.has(placement.assetId));
+  placedIllustrations.splice(0, placedIllustrations.length, ...availablePlacements);
+
+  if (!savedPlacementsRestored) {
+    const existingPlacementIds = new Set(placedIllustrations.map((placement) => placement.id));
+    pendingSavedPlacements.forEach((placement) => {
+      if (!availableAssetIds.has(placement.assetId) || existingPlacementIds.has(placement.id)) return;
+      placedIllustrations.push({ ...placement });
+      existingPlacementIds.add(placement.id);
+    });
+    savedPlacementsRestored = true;
+  }
+
+  renderIllustrationLibrary();
+}
+
+function renderAnchoredIllustrations() {
+  els.pages.querySelectorAll(".anchored-illustration").forEach((item) => item.remove());
+  const illustrations = documentIllustrationsById();
+
+  els.pages.querySelectorAll(".illustration-anchor").forEach((anchor) => {
+    const id = anchor.dataset.illustrationId;
+    const block = illustrations.get(id);
+    const defaultLayout = defaultIllustrationLayouts.get(id);
+    const anchoredPaper = anchor.closest(".paper");
+    const defaultPaper = defaultLayout
+      ? [...els.pages.querySelectorAll(".paper")].find((item) => item.dataset.figmaFrame === defaultLayout.frame)
+      : null;
+    const paper = defaultPaper || anchoredPaper;
+    if (!block || !paper || hiddenIllustrationIds.has(id) || !safeImageSource(block.src)) return;
+
+    const defaultWidth = Math.min(260, Math.max(120, block.width || 220));
+    const width = illustrationWidths.get(id) || defaultLayout?.width || defaultWidth;
+    const paperRect = paper.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const scale = paperRect.width / paper.offsetWidth || 1;
+    const anchorY = (anchorRect.top - paperRect.top) / scale;
+    const estimatedHeight = block.width > 0 && block.height > 0
+      ? width * (block.height / block.width)
+      : width;
+    const captionHeight = block.caption ? 20 : 0;
+    const left = defaultLayout?.left ?? Math.max(42, paper.offsetWidth - 42 - width);
+    const top = defaultLayout?.top ?? Math.max(42, Math.min(anchorY, 716 - estimatedHeight - captionHeight));
+
+    const illustration = document.createElement("figure");
+    illustration.className = "content-image preview-illustration anchored-illustration";
+    illustration.dataset.illustrationId = id;
+    illustration.style.left = `${left}px`;
+    illustration.style.top = `${top}px`;
+    illustration.style.width = `${width}px`;
+    illustration.tabIndex = 0;
+    illustration.setAttribute("aria-label", `${block.alt || "Illustration"}. Drag to reposition it, or use the lower-right handle to resize it.`);
+
+    const image = document.createElement("img");
+    image.src = block.src;
+    image.alt = block.alt || "";
+    illustration.append(image);
+
+    if (block.caption) {
+      const caption = document.createElement("figcaption");
+      caption.textContent = block.caption;
+      illustration.append(caption);
+    }
+
+    const name = block.alt || "illustration";
+    const remove = makeIllustrationRemoveButton(name, () => {
+      hiddenIllustrationIds.add(id);
+      illustration.remove();
+      markIllustrationsDirty();
+    });
+    illustration.append(remove, makeIllustrationResizeHandle(name));
+    paper.append(illustration);
+  });
+}
+
 function renderPlacedIllustrations() {
   els.pages.querySelectorAll(".placed-illustration").forEach((item) => item.remove());
   placedIllustrations.forEach((placement) => {
@@ -941,22 +1070,14 @@ function renderPlacedIllustrations() {
     const image = document.createElement("img");
     image.src = asset.src;
     image.alt = asset.name;
-    const remove = document.createElement("button");
-    remove.className = "illustration-remove";
-    remove.type = "button";
-    remove.setAttribute("aria-label", `Remove ${asset.name}`);
-    remove.textContent = "×";
-    remove.addEventListener("click", () => {
+    const remove = makeIllustrationRemoveButton(asset.name, () => {
       const index = placedIllustrations.findIndex((item) => item.id === placement.id);
       if (index !== -1) placedIllustrations.splice(index, 1);
       illustrationPositions.delete(placement.id);
       illustration.remove();
       markIllustrationsDirty();
     });
-    const resize = document.createElement("button");
-    resize.className = "illustration-resize";
-    resize.type = "button";
-    resize.setAttribute("aria-label", `Resize ${asset.name}`);
+    const resize = makeIllustrationResizeHandle(asset.name);
     illustration.append(image, remove, resize);
     paper.append(illustration);
   });
@@ -1017,7 +1138,7 @@ function initializeIllustrationDragging() {
 }
 
 function initializeIllustrationResizing() {
-  els.pages.querySelectorAll(".placed-illustration").forEach((illustration) => {
+  els.pages.querySelectorAll(".placed-illustration, .anchored-illustration").forEach((illustration) => {
     const handle = illustration.querySelector(".illustration-resize");
     if (!handle || handle.dataset.resizeInitialized === "true") return;
     handle.dataset.resizeInitialized = "true";
@@ -1027,7 +1148,8 @@ function initializeIllustrationResizing() {
       if (event.button !== 0) return;
       const placement = placedIllustrations.find((item) => item.id === id);
       const paper = illustration.closest(".paper");
-      if (!placement || !paper) return;
+      const isAnchored = illustration.classList.contains("anchored-illustration");
+      if ((!placement && !isAnchored) || !paper) return;
       event.preventDefault();
       event.stopPropagation();
       handle.setPointerCapture(event.pointerId);
@@ -1035,14 +1157,16 @@ function initializeIllustrationResizing() {
 
       const paperRect = paper.getBoundingClientRect();
       const scale = paperRect.width / paper.offsetWidth || 1;
-      const startWidth = placement.width || 132;
+      const startWidth = placement?.width || illustrationWidths.get(id) || Number.parseFloat(illustration.style.width) || 132;
       const startX = event.clientX;
       const position = illustrationPositions.get(id) || { x: 0, y: 0 };
-      const maxWidth = Math.max(52, paper.offsetWidth - placement.x - position.x);
+      const baseLeft = Number.parseFloat(illustration.style.left) || 0;
+      const maxWidth = Math.max(52, paper.offsetWidth - baseLeft - position.x);
 
       const move = (moveEvent) => {
         const width = Math.min(maxWidth, Math.max(52, startWidth + (moveEvent.clientX - startX) / scale));
-        placement.width = width;
+        if (placement) placement.width = width;
+        else illustrationWidths.set(id, width);
         illustration.style.width = `${width}px`;
       };
 
@@ -1064,22 +1188,17 @@ function initializeIllustrationResizing() {
 function initializeIllustrationDropTargets() {
   els.pages.querySelectorAll(".paper").forEach((paper) => {
     paper.addEventListener("dragover", (event) => {
-      if (![...event.dataTransfer.types].some((type) => type === "Files" || type === "application/x-resilience-illustration")) return;
+      if (![...event.dataTransfer.types].includes("application/x-resilience-illustration")) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
       paper.classList.add("is-illustration-drop-target");
     });
     paper.addEventListener("dragleave", () => paper.classList.remove("is-illustration-drop-target"));
-    paper.addEventListener("drop", async (event) => {
+    paper.addEventListener("drop", (event) => {
       event.preventDefault();
       paper.classList.remove("is-illustration-drop-target");
       const assetId = event.dataTransfer.getData("application/x-resilience-illustration");
-      if (assetId) {
-        placeLibraryIllustration(assetId, paper, event.clientX, event.clientY);
-        return;
-      }
-      const assets = await addIllustrationFiles(event.dataTransfer.files);
-      if (assets[0]) placeLibraryIllustration(assets[0].id, paper, event.clientX, event.clientY);
+      if (assetId) placeLibraryIllustration(assetId, paper, event.clientX, event.clientY);
     });
   });
 }
@@ -1749,6 +1868,7 @@ function paginate() {
 
   els.pages.replaceChildren(...makePageComparisons(output, isLiveDocument));
   activateLinks(els.pages);
+  renderAnchoredIllustrations();
   renderPlacedIllustrations();
   initializeIllustrationDragging();
   initializeIllustrationResizing();
@@ -1823,6 +1943,7 @@ async function importAndRender() {
     documentModel = nextModel;
     importedSpecialPages = transformed.specialPages;
     isLiveDocument = true;
+    syncIllustrationLibraryFromDocument();
     paginate();
     els.importSummary.textContent = "";
     els.importSummary.hidden = true;
@@ -1868,21 +1989,7 @@ els.quickLink.addEventListener("click", () => {
   importAndRender();
 });
 els.saveIllustrations.addEventListener("click", saveIllustrations);
-els.illustrationInput.addEventListener("change", async () => {
-  await addIllustrationFiles(els.illustrationInput.files);
-  els.illustrationInput.value = "";
-});
-els.illustrationLibrary.addEventListener("dragover", (event) => {
-  if (![...event.dataTransfer.types].includes("Files")) return;
-  event.preventDefault();
-  els.illustrationLibrary.classList.add("is-drop-target");
-});
-els.illustrationLibrary.addEventListener("dragleave", () => els.illustrationLibrary.classList.remove("is-drop-target"));
-els.illustrationLibrary.addEventListener("drop", async (event) => {
-  event.preventDefault();
-  els.illustrationLibrary.classList.remove("is-drop-target");
-  await addIllustrationFiles(event.dataTransfer.files);
-});
+els.illustrationSupportEmail.addEventListener("click", updateIllustrationSupportEmail);
 els.docsUrl.addEventListener("keydown", (event) => {
   if (event.key === "Enter") importAndRender();
 });
