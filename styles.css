@@ -1453,7 +1453,8 @@ textarea:focus {
 }
 
 .content-table th {
-  font-weight: 600;
+  /* Keep the semantic table header without overriding Google Docs emphasis. */
+  font-weight: 400;
 }
 
 .content-table strong {
@@ -1490,6 +1491,13 @@ textarea:focus {
 
 .content-table p {
   margin: 0;
+}
+
+/* Google Docs exports Enter + Enter as an empty paragraph. Preserve that
+   authoring break just like a Shift+Enter <br> instead of collapsing it. */
+.content-table p:empty,
+.content-table p:has(> :is(strong, b, em, i, u, span):only-child:empty) {
+  min-height: 1lh;
 }
 
 .content-table.table-single-column tr:nth-child(2) > * {

@@ -641,10 +641,7 @@ export function transformGoogleDocExport(html, options = {}) {
 
   normalizedImported.forEach((node, index) => {
     if (node.tagName !== "H1" || normalizedImported[index + 1]?.tagName !== "P") return;
-    const nextStructuralNode = normalizedImported.slice(index + 2).find((candidate) => candidate.textContent.trim());
-    if (nextStructuralNode && /^H[2-6]$/.test(nextStructuralNode.tagName)) {
-      normalizedImported[index + 1].dataset.role = "chapter-dek";
-    }
+    normalizedImported[index + 1].dataset.role = "chapter-dek";
   });
 
   return {
