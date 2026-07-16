@@ -902,14 +902,6 @@ function restoreSavedIllustrations() {
   const savedNumbers = pendingSavedPlacements
     .map((item) => Number(item.id.match(/(?:asset|placed)-(\d+)$/)?.[1] || 0));
   illustrationSequence = Math.max(illustrationSequence, ...savedNumbers);
-  if (
-    pendingSavedPlacements.length
-    || savedPositions.length
-    || savedWidths.length
-    || savedHiddenIllustrations.length
-  ) {
-    setIllustrationSaveStatus("Saved illustration layout restored.");
-  }
 }
 
 function placeLibraryIllustration(assetId, paper, clientX, clientY) {
